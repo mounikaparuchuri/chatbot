@@ -1,4 +1,4 @@
 [server]
-baseUrlPath = "findmychapter3-gpt.streamlit.app"
+baseUrlPath = "https://findmychapter3-gpt.streamlit.app/"
 enableXsrfProtection = false
 enableCORS = false
