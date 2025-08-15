@@ -1,56 +1,59 @@
+# app.py
+
 import streamlit as st
-from openai import OpenAI
+import google.generativeai as genai
 
-# Show title and description.
-st.title("💬 Chatbot")
-st.write(
-    "This is a simple chatbot that uses OpenAI's GPT-3.5 model to generate responses. "
-    "To use this app, you need to provide an OpenAI API key, which you can get [here](https://platform.openai.com/account/api-keys). "
-    "You can also learn how to build this app step by step by [following our tutorial](https://docs.streamlit.io/develop/tutorials/llms/build-conversational-apps)."
-)
+# --- Streamlit Application ---
 
-# Ask user for their OpenAI API key via `st.text_input`.
-# Alternatively, you can store the API key in `./.streamlit/secrets.toml` and access it
-# via `st.secrets`, see https://docs.streamlit.io/develop/concepts/connections/secrets-management
-openai_api_key = st.text_input("OpenAI API Key", type="password")
-if not openai_api_key:
-    st.info("Please add your OpenAI API key to continue.", icon="🗝️")
+st.title("Gemini Conversational Chatbot")
+st.caption("A simple chatbot built with Streamlit and Google Gemini.")
+
+# --- Google Gemini API Setup ---
+# Use Streamlit's built-in secrets management to retrieve the API key.
+# You must set this in your Streamlit Cloud app's secrets.
+GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
+genai.configure(api_key=GEMINI_API_KEY)
+
+# Initialize the generative model with a chat session for conversational memory.
+model = genai.GenerativeModel('gemini-2.5-flash-preview-05-20')
+
+# st.session_state is used to store and persist data across app reruns.
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
+# --- Customization for Squarespace Integration ---
+# Retrieve the query parameters from the URL.
+query_params = st.query_params
+
+# Check if the 'user' parameter exists in the URL.
+if "user" in query_params:
+    username = query_params["user"]
+    st.write(f"Hello, {username}! This chatbot is now embedded in your Squarespace member site.")
 else:
+    st.write("Hello, guest! Please log in to your Squarespace member site to see your personalized content.")
 
-    # Create an OpenAI client.
-    client = OpenAI(api_key=openai_api_key)
+st.write("---")
 
-    # Create a session state variable to store the chat messages. This ensures that the
-    # messages persist across reruns.
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
+# Display chat messages from history on app rerun.
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
 
-    # Display the existing chat messages via `st.chat_message`.
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
+# Accept user input.
+if prompt := st.chat_input("What is up?"):
+    # Add user message to chat history.
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    # Display user message in chat message container.
+    with st.chat_message("user"):
+        st.markdown(prompt)
 
-    # Create a chat input field to allow the user to enter a message. This will display
-    # automatically at the bottom of the page.
-    if prompt := st.chat_input("What is up?"):
-
-        # Store and display the current prompt.
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.markdown(prompt)
-
-        # Generate a response using the OpenAI API.
-        stream = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": m["role"], "content": m["content"]}
-                for m in st.session_state.messages
-            ],
-            stream=True,
-        )
-
-        # Stream the response to the chat using `st.write_stream`, then store it in 
-        # session state.
-        with st.chat_message("assistant"):
-            response = st.write_stream(stream)
-        st.session_state.messages.append({"role": "assistant", "content": response})
+    # Display assistant response in chat message container.
+    with st.chat_message("assistant"):
+        with st.spinner("Thinking..."):
+            # Prepare the history for the API call, converting the 'assistant' role to 'model'.
+            history = [{"role": "model" if m["role"] == "assistant" else "user", "parts": [{"text": m["content"]}]} for m in st.session_state.messages]
+            # Call the Gemini API with the full conversation history.
+            response = model.generate_content(history)
+            st.markdown(response.text)
+    # Add assistant response to chat history.
+    st.session_state.messages.append({"role": "assistant", "content": response.text})
