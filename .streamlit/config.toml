@@ -1,2 +1,5 @@
 [server]
 cookie_samesite = "None"
+baseUrlPath = "https://findmychapter3-gpt.streamlit.app/"
+enableXsrfProtection = false
+enableCORS = false
