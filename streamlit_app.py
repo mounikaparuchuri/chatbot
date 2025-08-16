@@ -17,7 +17,7 @@ client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 # Use session state to manage the 'logged in' status
 # This bypasses the third-party cookie issue in iframes
 if "authenticated" not in st.session_state:
-    st.session_state.authenticated = False
+    st.session_state.authenticated = True
 
 # Display a simple login form if not authenticated
 # The password check can be a pre-shared 'key' or a simple blank
