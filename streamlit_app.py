@@ -13,38 +13,72 @@ st.write(
 # This client is created once at the start of the app's life.
 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
-# Create a session state variable to store the chat messages.
-# This ensures that the messages persist across reruns.
-if "messages" not in st.session_state:
-    st.session_state.messages = []
 
-# Display the existing chat messages.
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
+# Use session state to manage the 'logged in' status
+# This bypasses the third-party cookie issue in iframes
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
 
-# Create a chat input field to allow the user to enter a message.
-# This will display automatically at the bottom of the page.
-if prompt := st.chat_input("What is up?"):
+# Display a simple login form if not authenticated
+# The password check can be a pre-shared 'key' or a simple blank
+if not st.session_state.authenticated:
+    st.title("Log In to Continue")
+    
+    # A simple, password-less input for demonstration.
+    # Users just need to click 'Enter'.
+    password = st.text_input("Enter to proceed", type="password")
 
-    # Store and display the current prompt as a user message.
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user"):
-        st.markdown(prompt)
+    if st.button("Enter"):
+        # We can use a simple password check, like checking if the input is not empty.
+        # For a truly 'public' app, you can check for a specific, pre-shared key.
+        # Here we just check if any text was entered.
+        if password:
+            st.session_state.authenticated = True
+            st.experimental_rerun()
+        else:
+            st.error("Please enter something to proceed.")
+else:
+    # Create a session state variable to store the chat messages.
+    # This ensures that the messages persist across reruns.
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
 
-    # Generate a response using the OpenAI API.
-    stream = client.chat.completions.create(
-        model="gpt-3.5-turbo",
-        messages=[
-            {"role": m["role"], "content": m["content"]}
-            for m in st.session_state.messages
-        ],
-        stream=True,
-    )
+    # Display the existing chat messages.
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
 
-    # Stream the response to the chat using `st.write_stream`, then store it in
-    # session state.
-    with st.chat_message("assistant"):
-        response = st.write_stream(stream)
-    st.session_state.messages.append({"role": "assistant", "content": response})
+    # Create a chat input field to allow the user to enter a message.
+    # This will display automatically at the bottom of the page.
+    if prompt := st.chat_input("What is up?"):
+
+        # Store and display the current prompt as a user message.
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.markdown(prompt)
+
+        # Generate a response using the OpenAI API.
+        stream = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": m["role"], "content": m["content"]}
+                for m in st.session_state.messages
+            ],
+            stream=True,
+        )
+
+        # Stream the response to the chat using `st.write_stream`, then store it in
+        # session state.
+        with st.chat_message("assistant"):
+            response = st.write_stream(stream)
+        st.session_state.messages.append({"role": "assistant", "content": response})
+    #st.title("Welcome! You are now viewing the app.")
+     #st.write("This part of the app is now accessible because the session state is set.")
+    
+     #st.info("Now that you've 'logged in', the app will display correctly in the iframe.")
+
+    # A logout button to reset the session
+    if st.button("Log out"):
+        st.session_state.authenticated = False
+        st.experimental_rerun()
 
