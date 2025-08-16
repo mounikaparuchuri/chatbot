@@ -77,8 +77,8 @@ else:
     
      #st.info("Now that you've 'logged in', the app will display correctly in the iframe.")
 
-    # A logout button to reset the session
-    if st.button("Log out"):
-        st.session_state.authenticated = False
-        st.experimental_rerun()
+    # # A logout button to reset the session
+    # if st.button("Log out"):
+    #     st.session_state.authenticated = False
+    #     st.experimental_rerun()
 
