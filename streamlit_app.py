@@ -19,6 +19,9 @@ client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = True
 
+if st.query_params.get("auth_satisfied") == "true":
+    st.session_state.authenticated = True
+
 # Display a simple login form if not authenticated
 # The password check can be a pre-shared 'key' or a simple blank
 if not st.session_state.authenticated:
