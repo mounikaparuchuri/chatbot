@@ -53,12 +53,22 @@ else:
 
     # Create a chat input field to allow the user to enter a message.
     # This will display automatically at the bottom of the page.
-    if prompt := st.chat_input("What is up?"):
 
+    prompt = st.chat_input(
+        "Say something and/or attach an image",
+        accept_file=True,
+        file_type=["jpg", "jpeg", "png"],
+    )
+
+    if prompt and prompt.text:
         # Store and display the current prompt as a user message.
+        if prompt and prompt["files"]:
+            st.image(prompt["files"][0])
+            print("received file")
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
+            # st.markdown(prompt.text)
 
         # Generate a response using the OpenAI API.
         stream = client.chat.completions.create(
