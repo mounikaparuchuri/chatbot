@@ -5,8 +5,6 @@ from openai import OpenAI
 st.title("💬 Chatbot")
 st.write(
     "This is a simple chatbot that uses OpenAI's GPT-3.5 model to generate responses. "
-    "To use this app, you need to provide an OpenAI API key, which you can get [here](https://platform.openai.com/account/api-keys). "
-    "You can also learn how to build this app step by step by [following our tutorial](https://docs.streamlit.io/develop/tutorials/llms/build-conversational-apps)."
 )
 
 # Create an OpenAI client.
@@ -44,7 +42,7 @@ if prompt and prompt.text:
         print("received file")
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
-        st.markdown(prompt)
+        st.markdown(prompt.text)
         # st.markdown(prompt.text)
 
     # Generate a response using the OpenAI API.
@@ -62,13 +60,5 @@ if prompt and prompt.text:
     with st.chat_message("assistant"):
         response = st.write_stream(stream)
     st.session_state.messages.append({"role": "assistant", "content": response})
-#st.title("Welcome! You are now viewing the app.")
-    #st.write("This part of the app is now accessible because the session state is set.")
 
-    #st.info("Now that you've 'logged in', the app will display correctly in the iframe.")
-
-# # A logout button to reset the session
-# if st.button("Log out"):
-#     st.session_state.authenticated = False
-#     st.experimental_rerun()
 
