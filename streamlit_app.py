@@ -110,8 +110,8 @@ if prompt_input and prompt_input.text:
     
     # Store and display the user message in session state.
     st.session_state.messages.append({"role": "user", "content": user_content})
-    with st.chat_message("user"):
-        st.markdown(prompt_input.text)
+    # with st.chat_message("user"):
+    #     st.markdown(prompt_input.text)
     # --- Prepare Messages for Gemini API ---
     model_messages = []
     for msg in st.session_state.messages:
