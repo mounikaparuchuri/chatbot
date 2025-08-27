@@ -1,7 +1,8 @@
 import streamlit as st
-#from openai import OpenAI
 import google.generativeai as genai
 from prompts_utility import get_prompt
+from PIL import Image
+from io import BytesIO
 
 # Show title and description.
 st.title("💬 Chatbot")
@@ -9,14 +10,11 @@ st.write(
     "Find My Chapter 3 chatbot."
 )
 
-# Create an OpenAI client.
-# This client is created once at the start of the app's life.
-#client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+# Configure the Google Generative AI client with your API key
 GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
 genai.configure(api_key=GEMINI_API_KEY)
 
 # Create a session state variable to store the chat messages.
-# This ensures that the messages persist across reruns.
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
@@ -31,67 +29,81 @@ if "pname" in query_params:
 
 # Display the existing chat messages.
 for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
+    # Google's Gemini API has a specific structure for chat history
+    # We need to filter out the system message for display purposes
+    if message["role"] == "user":
+        with st.chat_message("user"):
+            if isinstance(message["content"], list):
+                # Handle multimodal content
+                for part in message["content"]:
+                    if isinstance(part, str):
+                        st.markdown(part)
+                    elif isinstance(part, Image.Image):
+                        st.image(part)
+            else:
+                st.markdown(message["content"])
+    elif message["role"] == "assistant":
+        with st.chat_message("assistant"):
+            st.markdown(message["content"])
+
 
 # Create a chat input field to allow the user to enter a message.
-# This will display automatically at the bottom of the page.
-
-prompt = st.chat_input(
+prompt_input = st.chat_input(
     "Say something and/or attach an image",
     accept_file=True,
     file_type=["jpg", "jpeg", "png"],
 )
 
-if prompt and prompt.text:
-    # Store and display the current prompt as a user message.
-    if prompt and prompt["files"]:
-        st.image(prompt["files"][0])
-        print("received file")
-    st.session_state.messages.append({"role": "user", "content": prompt})
+if prompt_input and prompt_input.text:
+    # Create the user message content.
+    user_content = []
+    
+    # Check for uploaded files and add to content.
+    if prompt_input["files"]:
+        uploaded_file = prompt_input["files"][0]
+        image = Image.open(uploaded_file)
+        user_content.append(image)
+        with st.chat_message("user"):
+            st.image(image)
+    
+    # Add the text from the prompt.
+    user_content.append(prompt_input.text)
+    
+    # Store and display the user message in session state.
+    st.session_state.messages.append({"role": "user", "content": user_content})
     with st.chat_message("user"):
-        st.markdown(prompt.text)
-        # st.markdown(prompt.text)
-
-    # # Generate a response using the OpenAI API.
-    # stream = client.chat.completions.create(
-    #     model="gpt-3.5-turbo",
-    #     messages=[
-    #         {"role": m["role"], "content": m["content"]}
-    #         for m in st.session_state.messages
-    #     ],
-    #     stream=True,
-    # )
-
-    # # Stream the response to the chat using `st.write_stream`, then store it in
-    # # session state.
-    # with st.chat_message("assistant"):
-    #     response = st.write_stream(stream)
-    # st.session_state.messages.append({"role": "assistant", "content": response})
-
-    # Convert Streamlit's message format to Google's format
-    # The system message is handled implicitly by adding it to the history
-    model_messages = []
-    for message in st.session_state.messages:
-        if message["role"] == "system":
-            # The system prompt is an initial instruction, not part of the conversation turn.
-            # You handle this by adding the instruction to the first user message.
-            # However, for a chat model, the best practice is to include it as a context setting
-            # in the prompt itself, as the Gemini API doesn't have a dedicated "system" role.
-            continue
-        # The API requires "model" and "user" roles.
-        # The assistant role from st.session_state becomes "model" for the API.
-        role = "model" if message["role"] == "assistant" else "user"
-        model_messages.append({"role": role, "parts": [message["content"]]})
-
-    # The first message from the user should include the system prompt for context
-    if model_messages:
-        model_messages[0]["parts"] = [st.session_state.messages[0]["content"]] + model_messages[0]["parts"]
+        st.markdown(prompt_input.text)
 
     try:
         model = genai.GenerativeModel("gemini-1.5-flash")
         
-        # The Gemini API uses `generate_content` for streaming
+        # Prepare the messages for the Gemini API call.
+        # This part requires careful formatting for multimodal input.
+        model_messages = []
+        for msg in st.session_state.messages:
+            role = "model" if msg["role"] == "assistant" else "user"
+            
+            # The API's 'parts' list can contain both text and images.
+            parts = []
+            if isinstance(msg["content"], list):
+                for part in msg["content"]:
+                    if isinstance(part, str):
+                        parts.append(part)
+                    elif isinstance(part, Image.Image):
+                        parts.append(part)
+            else:
+                # Handle simple text messages.
+                parts.append(msg["content"])
+            
+            model_messages.append({"role": role, "parts": parts})
+
+        # The system prompt is an initial instruction and not part of the conversation turn.
+        # You handle this by adding the instruction to the first user message.
+        if model_messages and st.session_state.messages[0]["role"] == "system":
+            system_instruction = st.session_state.messages[0]["content"]
+            model_messages[0]["parts"] = [system_instruction] + model_messages[0]["parts"]
+            
+        # The Gemini API uses `generate_content` for streaming.
         response_stream = model.generate_content(
             model_messages,
             stream=True
@@ -105,10 +117,8 @@ if prompt and prompt.text:
                     st.write(chunk.text, end="")
             st.markdown(full_response)
         
-        # Add the assistant's response to the chat history
+        # Add the assistant's response to the chat history.
         st.session_state.messages.append({"role": "assistant", "content": full_response})
 
     except Exception as e:
         st.error(f"An error occurred: {e}")
-
-
