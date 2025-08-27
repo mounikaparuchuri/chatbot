@@ -1,6 +1,8 @@
 import streamlit as st
 import google.generativeai as genai
 from PIL import Image
+import PyPDF2
+import docx
 from io import BytesIO
 
 # Show title and description.
