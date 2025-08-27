@@ -1,6 +1,5 @@
 import streamlit as st
 import google.generativeai as genai
-from prompts_utility import get_prompt
 from PIL import Image
 from io import BytesIO
 
@@ -22,11 +21,13 @@ if "messages" not in st.session_state:
 query_params = st.query_params
 if "pname" in query_params:
     systempromptname = query_params["pname"]
-    print("prompt name" + systempromptname)
     system_prompt = st.secrets[systempromptname]
-    st.session_state.messages = [
-        {"role": "system", "content": system_prompt}
-    ]
+    # st.session_state.messages = [
+    #     {"role": "system", "content": system_prompt}
+    # ]
+    if not st.session_state.messages or st.session_state.messages[0]["role"] != "system":
+        st.session_state.messages.insert(0, {"role": "system", "content": system_prompt})
+
 
 # Display the existing chat messages.
 for message in st.session_state.messages:
@@ -52,7 +53,7 @@ for message in st.session_state.messages:
 prompt_input = st.chat_input(
     "Say something and/or attach an image",
     accept_file=True,
-    file_type=["jpg", "jpeg", "png"],
+    file_type=["jpg", "jpeg", "png", "pdf", "doc", "docx"],
 )
 
 if prompt_input and prompt_input.text:
@@ -74,6 +75,33 @@ if prompt_input and prompt_input.text:
     st.session_state.messages.append({"role": "user", "content": user_content})
     with st.chat_message("user"):
         st.markdown(prompt_input.text)
+    # --- Prepare Messages for Gemini API ---
+    model_messages = []
+    for msg in st.session_state.messages:
+        if msg["role"] == "system":
+            # The Gemini API doesn't have a "system" role, so we prepend
+            # the system instruction to the first user message.
+            continue
+
+        role = "model" if msg["role"] == "assistant" else "user"
+        parts = []
+
+        if isinstance(msg["content"], list):
+            for part in msg["content"]:
+                if isinstance(part, str):
+                    parts.append(part)
+                elif isinstance(part, Image.Image):
+                    parts.append(part)
+        else:
+            parts.append(msg["content"])
+        
+        model_messages.append({"role": role, "parts": parts})
+    
+    # Add the system prompt to the first user message parts.
+    if st.session_state.messages and st.session_state.messages[0]["role"] == "system":
+        system_instruction = st.session_state.messages[0]["content"]
+        if model_messages:
+            model_messages[0]["parts"].insert(0, system_instruction)
 
     try:
         model = genai.GenerativeModel("gemini-1.5-flash")
@@ -98,11 +126,11 @@ if prompt_input and prompt_input.text:
             
             model_messages.append({"role": role, "parts": parts})
 
-        # The system prompt is an initial instruction and not part of the conversation turn.
-        # You handle this by adding the instruction to the first user message.
-        if model_messages and st.session_state.messages[0]["role"] == "system":
-            system_instruction = st.session_state.messages[0]["content"]
-            model_messages[0]["parts"] = [system_instruction] + model_messages[0]["parts"]
+        # # The system prompt is an initial instruction and not part of the conversation turn.
+        # # You handle this by adding the instruction to the first user message.
+        # if model_messages and st.session_state.messages[0]["role"] == "system":
+        #     system_instruction = st.session_state.messages[0]["content"]
+        #     model_messages[0]["parts"] = [system_instruction] + model_messages[0]["parts"]
             
         # The Gemini API uses `generate_content` for streaming.
         response_stream = model.generate_content(
