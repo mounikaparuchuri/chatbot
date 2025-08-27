@@ -11,5 +11,5 @@ def get_prompt(prompt_name):
     Returns:
         str: The corresponding system prompt string, or a default message if not found.
     """
-    prompts = st.secrets["prompts"]
+    prompts = st.secrets["prompt_name"]
     return prompts.get(prompt_name, "You are a helpful assistant.")
