@@ -22,8 +22,8 @@ if "messages" not in st.session_state:
 query_params = st.query_params
 if "pname" in query_params:
     systempromptname = query_params["pname"]
-    print("prompt name" + systempromptname);
-    system_prompt = get_prompt(systempromptname)
+    print("prompt name" + systempromptname)
+    system_prompt = st.secrets[systempromptname]
     st.session_state.messages = [
         {"role": "system", "content": system_prompt}
     ]
