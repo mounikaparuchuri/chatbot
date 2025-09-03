@@ -15,7 +15,7 @@ def get_worksheet(spreadsheet_name, sheet_name):
                 "https://www.googleapis.com/auth/drive"]
 
     # Open the spreadsheet and get the specific worksheet
-    spreadsheet = client.open(spreadsheet_name,scope)
+    spreadsheet = client.open(spreadsheet_name)
     return spreadsheet.worksheet(sheet_name)
 
 # Read Data from Google Sheets
