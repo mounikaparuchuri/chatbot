@@ -17,9 +17,6 @@ def get_worksheet(spreadsheet_name, sheet_name):
     print(spreadsheet.worksheet(sheet_name))
     return spreadsheet.worksheet(sheet_name)
 
-
-   
-
 # Read Data from Google Sheets
 def read_data():
     worksheet = get_worksheet("testfmc3chat", "Sheet1")
