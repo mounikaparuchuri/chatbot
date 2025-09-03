@@ -2,7 +2,7 @@ import gspread # type: ignore
 import streamlit as st
 
 # Authenticate and connect to Google Sheets    
-def get_worksheet(spreadsheet_name, sheet_name):
+def get_worksheet(spreadsheet_name):
     """
     Authorizes and opens a Google Sheet using credentials from Streamlit secrets.
     """
@@ -19,11 +19,11 @@ def get_worksheet(spreadsheet_name, sheet_name):
 
 # Read Data from Google Sheets
 def read_data():
-    worksheet = get_worksheet("testfmc3chat", "Sheet1")
+    worksheet = get_worksheet("testfmc3chat")
     data = worksheet.get_all_values()  # Get all records from Google Sheet
     return data
 
 # Add Data to Google Sheets
 def add_data(row):
-    worksheet = get_worksheet("testfmc3chat", "Sheet1")
+    worksheet = get_worksheet("testfmc3chat")
     worksheet.append_row(row)
