@@ -8,7 +8,6 @@ def get_worksheet(spreadsheet_name, sheet_name):
     """
     # Authorize with the credentials stored in st.secrets
     creds_dict = st.secrets["gspread"]
-    print(creds_dict)
     client = gspread.service_account_from_dict(creds_dict)
 
     # Open the spreadsheet and get the specific worksheet
