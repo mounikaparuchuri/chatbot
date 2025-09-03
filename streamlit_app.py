@@ -4,6 +4,7 @@ from PIL import Image
 import PyPDF2
 import docx
 from io import BytesIO
+from read import read_data, add_data
 
 # Show title and description.
 st.title("💬 Chatbot")
@@ -17,7 +18,8 @@ genai.configure(api_key=GEMINI_API_KEY)
 
 # Create a session state variable to store the chat messages.
 if "messages" not in st.session_state:
-    st.session_state.messages = []
+    data = read_data()
+    st.session_state.messages = [data]
 
 # Retrieve the query parameters from the URL.
 query_params = st.query_params
@@ -112,6 +114,7 @@ if prompt_input and prompt_input.text:
     st.session_state.messages.append({"role": "user", "content": user_content})
     with st.chat_message("user"):
         st.markdown(prompt_input.text)
+        add_data(prompt_input.text)
     # --- Prepare Messages for Gemini API ---
     model_messages = []
     for msg in st.session_state.messages:
@@ -129,8 +132,10 @@ if prompt_input and prompt_input.text:
                     parts.append(part)
                 elif isinstance(part, Image.Image):
                     parts.append(part)
+                add_data(part)
         else:
             parts.append(msg["content"])
+            add_data(part)
         
         model_messages.append({"role": role, "parts": parts})
     

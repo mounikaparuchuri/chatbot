@@ -24,6 +24,7 @@ def read_data():
     data = worksheet.get_all_records()  # Get all records from Google Sheet
     return data
 
+
 # Add Data to Google Sheets
 def add_data(row):
     worksheet = get_worksheet("My Spreadsheet", "Sheet1")
