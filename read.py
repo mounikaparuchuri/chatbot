@@ -14,8 +14,8 @@ def get_worksheet(spreadsheet_name, sheet_name):
     spreadsheet = client.open(spreadsheet_name)
     print("✅ Connection successful!")
     print("Data from the spreadsheet:")
-    print(spreadsheet.worksheet(sheet_name))
-    return spreadsheet.worksheet(sheet_name)
+    print(spreadsheet.sheet1)
+    return spreadsheet.sheet1
 
 # Read Data from Google Sheets
 def read_data():
