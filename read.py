@@ -20,11 +20,11 @@ def get_worksheet(spreadsheet_name, sheet_name):
 
 # Read Data from Google Sheets
 def read_data():
-    worksheet = get_worksheet("My Spreadsheet", "Sheet1")
+    worksheet = get_worksheet("testfmc3chat", "Sheet1")
     data = worksheet.get_all_records()  # Get all records from Google Sheet
     return data
 
 # Add Data to Google Sheets
 def add_data(row):
-    worksheet = get_worksheet("My Spreadsheet", "Sheet1")
+    worksheet = get_worksheet("testfmc3chat", "Sheet1")
     worksheet.append_row(row)
