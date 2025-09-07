@@ -34,12 +34,13 @@ genai.configure(api_key=GEMINI_API_KEY)
 
 # Create a session state variable to store the chat messages.
 if "messages" not in st.session_state:
-    print("retrieve_data")
-    data = retrieve_data(db_file_name)
+    # print("retrieve_data")
+    # data = retrieve_data(db_file_name)
     # pprint(data)
     st.session_state.messages = []
     print("Messages is empty")
-    st.session_state.messages.append({"role": "user", "content": data})
+    # st.session_state.messages.append({"role": "user", "content": data})
+
 
 # Display the existing chat messages.
 for message in st.session_state.messages:
