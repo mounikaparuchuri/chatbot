@@ -6,13 +6,27 @@ import docx
 from io import BytesIO
 from read import setup_db, save_data, retrieve_data
 
-# Show title and description.
-st.title("💬 Chatbot")
-st.write(
-    "Find My Chapter 3 chatbot."
-)
 db_file_name = 'chat_history.db'
 username = ''
+
+# if no username param throw error.
+# Retrieve the query parameters from the URL.
+query_params = st.query_params
+if "username" in query_params:
+    username = query_params["username"]
+    db_file_name = username + db_file_name
+    setup_db(db_file_name)
+    # Show title and description.
+    st.title("💬 Chatbot")
+    st.write(
+        "Find My Chapter 3 chatbot."
+    )
+else:
+    raise ValueError("This is my error message.")
+    st.title("💬 Chatbot")
+    st.write(
+        "error occured"
+    )
 
 # Create a session state variable to store the chat messages.
 if "messages" not in st.session_state:
@@ -34,13 +48,6 @@ if "pname" in query_params:
     system_prompt = st.secrets[systempromptname]
     if not st.session_state.messages or st.session_state.messages[0]["role"] != "system":
         st.session_state.messages.insert(0, {"role": "system", "content": system_prompt})
-
-# Retrieve the query parameters from the URL.
-query_params = st.query_params
-if "username" in query_params:
-    username = query_params["username"]
-    db_file_name = username + db_file_name
-setup_db(db_file_name)
 
 # Configure the Google Generative AI client with your API key
 GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
