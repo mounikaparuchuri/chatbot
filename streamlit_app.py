@@ -15,6 +15,17 @@ db_file_name = 'chat_history.db'
 username = ''
 # Retrieve the query parameters from the URL.
 query_params = st.query_params
+if "pname" in query_params:
+    systempromptname = query_params["pname"]
+    system_prompt = st.secrets[systempromptname]
+    # st.session_state.messages = [
+    #     {"role": "system", "content": system_prompt}
+    # ]
+    if not st.session_state.messages or st.session_state.messages[0]["role"] != "system":
+        st.session_state.messages.insert(0, {"role": "system", "content": system_prompt})
+
+# Retrieve the query parameters from the URL.
+query_params = st.query_params
 if "username" in query_params:
     username = query_params["username"]
     db_file_name = username + db_file_name
@@ -28,18 +39,9 @@ genai.configure(api_key=GEMINI_API_KEY)
 if "messages" not in st.session_state:
     data = retrieve_data(db_file_name)
     st.session_state.messages = []
-    st.session_state.messages.insert(1, {"role": "system", "content": data})
+    st.session_state.messages.insert(1, {"role": "user", "content": data})
 
-# Retrieve the query parameters from the URL.
-query_params = st.query_params
-if "pname" in query_params:
-    systempromptname = query_params["pname"]
-    system_prompt = st.secrets[systempromptname]
-    # st.session_state.messages = [
-    #     {"role": "system", "content": system_prompt}
-    # ]
-    if not st.session_state.messages or st.session_state.messages[0]["role"] != "system":
-        st.session_state.messages.insert(0, {"role": "system", "content": system_prompt})
+
 
 
 # Display the existing chat messages.
