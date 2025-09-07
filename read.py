@@ -64,19 +64,38 @@ def rename_db_file(old_name, new_name):
 
 # Function to retrieve all data from the database
 def retrieve_data(db_file):
-    """Retrieves all chat entries from the database."""
+    """Retrieves all chat entries from the database and formats them for Streamlit."""
     conn = create_connection(db_file)
+    messages = []
     if conn:
         try:
             c = conn.cursor()
-            # The SQL query to select all data
-            c.execute("SELECT username, request, response, timestamp FROM chat_log ORDER BY timestamp ASC")
-            # Fetch all the results
+            # Select the request (user message) and response (assistant message)
+            c.execute("SELECT request, response FROM chat_log ORDER BY timestamp ASC")
             data = c.fetchall()
-            return data
+            
+            # Loop through the fetched data and format it into a list of dictionaries
+            for request, response in data:
+                # Add the user's message
+                if request:  # Ensure the request is not empty
+                    messages.append({
+                        "role": "user", 
+                        "content": request
+                    })
+                
+                # Add the assistant's response
+                if response: # Ensure the response is not empty
+                    messages.append({
+                        "role": "assistant",
+                        "content": response
+                    })
+            
+            return messages
+            
         except sqlite3.Error as e:
             st.error(f"Error retrieving data from database: {e}")
             return []
         finally:
-            conn.close()
+            if conn:
+                conn.close()
     return []

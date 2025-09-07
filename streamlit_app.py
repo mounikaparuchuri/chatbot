@@ -13,6 +13,12 @@ st.write(
 )
 db_file_name = 'chat_history.db'
 username = ''
+
+# Create a session state variable to store the chat messages.
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+    print("Messages is empty")
+
 # Retrieve the query parameters from the URL.
 query_params = st.query_params
 if "pname" in query_params:
@@ -32,15 +38,14 @@ setup_db(db_file_name)
 GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
 genai.configure(api_key=GEMINI_API_KEY)
 
-# Create a session state variable to store the chat messages.
-if "messages" not in st.session_state:
-    # print("retrieve_data")
-    # data = retrieve_data(db_file_name)
-    # pprint(data)
-    st.session_state.messages = []
-    print("Messages is empty")
-    # st.session_state.messages.append({"role": "user", "content": data})
-
+#Retrieve message history from db.
+data = retrieve_data(db_file_name)
+# Check if data is a list of messages and loop through it.
+if data and isinstance(data, list):
+    # 'data' should be a list of dictionaries, each representing a message
+    for message in data:
+        # Assuming each message in the DB is a dict with 'role' and 'content' keys
+        st.session_state.messages.append(message)
 
 # Display the existing chat messages.
 for message in st.session_state.messages:
@@ -173,14 +178,6 @@ if prompt_input and prompt_input.text:
                 parts.append(msg["content"])
             
             model_messages.append({"role": role, "parts": parts})
-        # for msgStr in model_messages:
-        #     for mstr in msgStr.items():
-        #         pprint.pprint(mstr) 
-        # # The system prompt is an initial instruction and not part of the conversation turn.
-        # # You handle this by adding the instruction to the first user message.
-        # if model_messages and st.session_state.messages[0]["role"] == "system":
-        #     system_instruction = st.session_state.messages[0]["content"]
-        #     model_messages[0]["parts"] = [system_instruction] + model_messages[0]["parts"]
             
         # The Gemini API uses `generate_content` for streaming.
         response_stream = model.generate_content(
