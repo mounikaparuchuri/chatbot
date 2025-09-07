@@ -18,6 +18,14 @@ username = ''
 if "messages" not in st.session_state:
     st.session_state.messages = []
     print("Messages is empty")
+    #Retrieve message history from db when chat histpry is empty.
+    data = retrieve_data(db_file_name)
+    # Check if data is a list of messages and loop through it.
+    if data and isinstance(data, list):
+        # 'data' should be a list of dictionaries, each representing a message
+        for message in data:
+            # Assuming each message in the DB is a dict with 'role' and 'content' keys
+            st.session_state.messages.append(message)
 
 # Retrieve the query parameters from the URL.
 query_params = st.query_params
@@ -37,15 +45,6 @@ setup_db(db_file_name)
 # Configure the Google Generative AI client with your API key
 GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
 genai.configure(api_key=GEMINI_API_KEY)
-
-#Retrieve message history from db.
-data = retrieve_data(db_file_name)
-# Check if data is a list of messages and loop through it.
-if data and isinstance(data, list):
-    # 'data' should be a list of dictionaries, each representing a message
-    for message in data:
-        # Assuming each message in the DB is a dict with 'role' and 'content' keys
-        st.session_state.messages.append(message)
 
 # Display the existing chat messages.
 for message in st.session_state.messages:
