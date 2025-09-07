@@ -16,6 +16,7 @@ def create_connection(db_file):
 # Function to set up the database and table
 def setup_db(db_file):
     conn = create_connection(db_file)
+    print("db file name " + db_file)
     if conn:
         c = conn.cursor()
         c.execute('''
@@ -27,6 +28,7 @@ def setup_db(db_file):
                 timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         ''')
+        print("created connection for db file name " + db_file)
         conn.commit()
         conn.close()
 
