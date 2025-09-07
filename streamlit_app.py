@@ -1,6 +1,7 @@
 import streamlit as st
 import google.generativeai as genai
 from PIL import Image
+import pprint
 import PyPDF2
 import docx
 from io import BytesIO
@@ -177,7 +178,7 @@ if prompt_input and prompt_input.text:
             model_messages.append({"role": role, "parts": parts})
         for msgStr in model_messages:
             for mstr in msgStr.items():
-                print("model_messages " + mstr) 
+                pprint.pprint(mstr) 
         # # The system prompt is an initial instruction and not part of the conversation turn.
         # # You handle this by adding the instruction to the first user message.
         # if model_messages and st.session_state.messages[0]["role"] == "system":
