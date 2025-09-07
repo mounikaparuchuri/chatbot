@@ -175,8 +175,9 @@ if prompt_input and prompt_input.text:
                 parts.append(msg["content"])
             
             model_messages.append({"role": role, "parts": parts})
-        for msgStr in model_messages:    
-            print("model_messages " + {msgStr}) 
+        for msgStr in model_messages:
+            for mstr in msgStr.items():
+                print("model_messages " + {mstr}) 
         # # The system prompt is an initial instruction and not part of the conversation turn.
         # # You handle this by adding the instruction to the first user message.
         # if model_messages and st.session_state.messages[0]["role"] == "system":
