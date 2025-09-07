@@ -1,7 +1,6 @@
 import streamlit as st
 import google.generativeai as genai
 from PIL import Image
-import pprint
 import PyPDF2
 import docx
 from io import BytesIO
@@ -19,9 +18,6 @@ query_params = st.query_params
 if "pname" in query_params:
     systempromptname = query_params["pname"]
     system_prompt = st.secrets[systempromptname]
-    # st.session_state.messages = [
-    #     {"role": "system", "content": system_prompt}
-    # ]
     if not st.session_state.messages or st.session_state.messages[0]["role"] != "system":
         st.session_state.messages.insert(0, {"role": "system", "content": system_prompt})
 
@@ -40,13 +36,10 @@ genai.configure(api_key=GEMINI_API_KEY)
 if "messages" not in st.session_state:
     print("retrieve_data")
     data = retrieve_data(db_file_name)
-    pprint(data)
+    # pprint(data)
     st.session_state.messages = []
     print("Messages is empty")
-    st.session_state.messages.insert(1, {"role": "user", "content": data})
-
-
-
+    st.session_state.messages.append({"role": "user", "content": data})
 
 # Display the existing chat messages.
 for message in st.session_state.messages:
@@ -179,9 +172,9 @@ if prompt_input and prompt_input.text:
                 parts.append(msg["content"])
             
             model_messages.append({"role": role, "parts": parts})
-        for msgStr in model_messages:
-            for mstr in msgStr.items():
-                pprint.pprint(mstr) 
+        # for msgStr in model_messages:
+        #     for mstr in msgStr.items():
+        #         pprint.pprint(mstr) 
         # # The system prompt is an initial instruction and not part of the conversation turn.
         # # You handle this by adding the instruction to the first user message.
         # if model_messages and st.session_state.messages[0]["role"] == "system":
