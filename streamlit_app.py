@@ -27,7 +27,8 @@ genai.configure(api_key=GEMINI_API_KEY)
 # Create a session state variable to store the chat messages.
 if "messages" not in st.session_state:
     data = retrieve_data(db_file_name)
-    st.session_state.messages = [data]
+    st.session_state.messages = []
+    st.session_state.messages.insert(1, {"role": "system", "content": data})
 
 # Retrieve the query parameters from the URL.
 query_params = st.query_params
