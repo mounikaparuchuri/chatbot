@@ -3,7 +3,7 @@ import google.generativeai as genai
 from PIL import Image
 import PyPDF2
 import docx
-import pprint
+import json
 from io import BytesIO
 from read import setup_db, save_data, retrieve_data
 
@@ -67,6 +67,8 @@ def get_llm_response(user_input_content=None):
         if msg["role"] != "system":
             model_messages.append({"role": role, "parts": parts})
     
+    json_dump = json.dumps(model_messages, indent=2)
+    print(json_dump)
     try:
         response_stream = model.generate_content(model_messages, stream=True)
         
