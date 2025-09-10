@@ -68,7 +68,7 @@ def get_llm_response(user_input_content=None, initial_prompt=None):
             model_messages.append({"role": role, "parts": parts})
     
     try:
-        pprint.pprint(model_messages)
+        # pprint.pprint(model_messages)
         response_stream = model().generate_content(model_messages, stream=True)
         
         with st.chat_message("assistant"):
