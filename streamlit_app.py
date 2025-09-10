@@ -43,7 +43,7 @@ def setup_app():
 def get_llm_response(user_input_content=None, initial_prompt=None):
     """Prepares and sends messages to the LLM, then handles the response."""
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-    model = genai.GenerativeModel(model_name="gemini-2.0-flash")
+    model = genai.GenerativeModel(model_name="gemini-1.5-flash")
 
     # This list will be sent to the Gemini API
     model_messages = []
@@ -69,7 +69,6 @@ def get_llm_response(user_input_content=None, initial_prompt=None):
             model_messages.append({"role": role, "parts": parts})
     
     try:
-        # pprint.pprint(model_messages)
         response_stream = model().generate_content(model_messages, stream=True)
         
         with st.chat_message("assistant"):
