@@ -1,5 +1,6 @@
 import streamlit as st
 import google.generativeai as genai
+from google.generativeai.types import GenerateContentConfig, HttpOptions
 from PIL import Image
 import PyPDF2
 import docx
@@ -42,23 +43,10 @@ def setup_app():
 def get_llm_response(user_input_content=None, initial_prompt=None):
     """Prepares and sends messages to the LLM, then handles the response."""
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-    model = genai.GenerativeModel(
-        model_name="gemini-1.5-flash",
-        system_instruction=initial_prompt
-    )
+    model = genai.GenerativeModel(model_name="gemini-2.0-flash")
 
     # This list will be sent to the Gemini API
     model_messages = []
-    
-    # Add the system prompt to the very first message for context.
-    # The Gemini API doesn't have a dedicated system role, so we prepend it to the user's message.
-    # system_instruction = st.session_state.get("system_prompt", "")
-    # if system_instruction:
-    #     user_parts.insert(0, system_instruction)
-    # This logic handles both initial and subsequent messages
-    # if initial_prompt:
-    #     # For the very first message on page load
-    #     model_messages.append({"role": "system", "parts": [initial_prompt]})
 
     # For subsequent user messages
     user_parts = user_input_content if isinstance(user_input_content, list) else [user_input_content]
@@ -75,7 +63,8 @@ def get_llm_response(user_input_content=None, initial_prompt=None):
             model_messages.append({"role": role, "parts": parts})
     
     try:
-        response_stream = model().generate_content(model_messages, stream=True)
+        response_stream = model().generate_content(model_messages, config=GenerateContentConfig(
+        system_instruction=[initial_prompt]), stream=True)
         
         with st.chat_message("assistant"):
             full_response = ""
