@@ -3,163 +3,205 @@ import google.generativeai as genai
 from PIL import Image
 import PyPDF2
 import docx
-import json
 from io import BytesIO
 from read import setup_db, save_data, retrieve_data
 
-# Global variables
 db_file_name = 'chat_history.db'
 username = ''
 
-def setup_app():
-    """Initializes the app by checking for a username, setting up the DB, and loading chat history."""
-    global username, db_file_name
-    query_params = st.query_params
+# if no username param throw error.
+# Retrieve the query parameters from the URL.
+query_params = st.query_params
+if "username" in query_params:
+    username = query_params["username"]
+    db_file_name = username + db_file_name
+    setup_db(db_file_name)
+    # Show title and description.
+    st.title("💬 Chatbot")
+    st.write(
+        "Find My Chapter 3 chatbot."
+    )
+else:
+    raise ValueError("This is my error message.")
+    st.title("💬 Chatbot")
+    st.write(
+        "error occured"
+    )
 
-    if "username" in query_params:
-        username = query_params["username"]
-        db_file_name = f"{username}_chat_history.db"
-        setup_db(db_file_name)
-        st.title("💬 Chatbot")
-        st.write("Find My Chapter 3 chatbot.")
-    else:
-        st.title("💬 Chatbot")
-        st.write("Error occurred: 'username' parameter is missing.")
-        st.stop()
-    
-    # Load system prompt from secrets
-    if "pname" in query_params:
-        system_prompt_name = query_params["pname"]
-        st.session_state.system_prompt = st.secrets.get(system_prompt_name)
+# Create a session state variable to store the chat messages.
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+    print("Messages is empty")
+    #Retrieve message history from db when chat histpry is empty.
+    data = retrieve_data(db_file_name)
+    # Check if data is a list of messages and loop through it.
+    if data and isinstance(data, list):
+        # 'data' should be a list of dictionaries, each representing a message
+        for message in data:
+            # Assuming each message in the DB is a dict with 'role' and 'content' keys
+            st.session_state.messages.append(message)
 
-    # Initialize messages and load history if it's the first run
-    if "messages" not in st.session_state:
-        st.session_state.messages = retrieve_data(db_file_name) or []
-        
-    # If there's no chat history and a system prompt exists, send a hidden initial message
-    get_llm_response(user_input_content=[])
+# Retrieve the query parameters from the URL.
+query_params = st.query_params
+if "pname" in query_params:
+    systempromptname = query_params["pname"]
+    system_prompt = st.secrets[systempromptname]
+    if not st.session_state.messages or st.session_state.messages[0]["role"] != "system":
+        st.session_state.messages.insert(0, {"role": "system", "content": system_prompt})
 
-def get_llm_response(user_input_content=None):
-    """Prepares and sends messages to the LLM, then handles the response."""
-    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-    model = genai.GenerativeModel(model_name="gemini-2.0-flash")
+# Configure the Google Generative AI client with your API key
+GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
+genai.configure(api_key=GEMINI_API_KEY)
 
-    # This list will be sent to the Gemini API
-    model_messages = []
-    
-    # Add the system prompt to the very first message for context.
-    # For subsequent user messages
-    user_parts = user_input_content if isinstance(user_input_content, list) else [user_input_content]
-    # The Gemini API doesn't have a dedicated system role, so we prepend it to the user's message.
-    if "system_prompt" in st.session_state:
-        user_parts.insert(0, st.session_state.system_prompt)
-
-
-    # Add the system prompt to the current message if it exists
-    model_messages.append({"role": "user", "parts": user_parts})
-    
-    # # Add previous chat history for continuity
-    # for msg in st.session_state.messages:
-    #     # Check if 'msg' is a dictionary before trying to access its keys
-    #     if isinstance(msg, dict):
-    #         role = "model" if msg["role"] == "assistant" else "user"
-    #         parts = msg["content"] if isinstance(msg["content"], list) else [msg["content"]]
-        
-    #         # Exclude the system prompt from the history
-    #         if msg.get("role") != "system":
-    #             model_messages.append({"role": role, "parts": parts})
-    #     else:
-    #         # Optional: Print a warning or log the invalid message
-    #         print(f"Skipping invalid message of type: {type(msg)}")
-    
-    try:
-        response_stream = model.generate_content(model_messages, stream=True)
-        
-        with st.chat_message("assistant"):
-            full_response = ""
-            for chunk in response_stream:
-                full_response += chunk.text
-            st.markdown(full_response)
-        
-        # Save the new user message and the assistant's response
-        if user_input_content:
-            save_data(db_file_name, username, user_input_content, full_response)
-            st.session_state.messages.append({"role": "user", "content": user_input_content})
-            st.session_state.messages.append({"role": "assistant", "content": full_response})
-        else: # This branch handles the initial response from the system prompt
-            st.session_state.messages.append({"role": "assistant", "content": full_response})
-    
-    except Exception as e:
-        st.error(f"An error occurred: {e}")
-
-def display_messages():
-    """Displays chat messages from session state, excluding the system prompt."""
-    for message in st.session_state.messages:
-        if message["role"] == "user":
-            with st.chat_message("user"):
-                content = message["content"]
-                if isinstance(content, list):
-                    text_content = next((part for part in content if isinstance(part, str)), None)
-                    if text_content:
-                        st.markdown(text_content)
-                else:
-                    st.markdown(content)
-        elif message["role"] == "assistant":
-            with st.chat_message("assistant"):
+# Display the existing chat messages.
+for message in st.session_state.messages:
+    # Google's Gemini API has a specific structure for chat history
+    # We need to filter out the system message for display purposes
+    if message["role"] == "user":
+        with st.chat_message("user"):
+            if isinstance(message["content"], list):
+                # Handle multimodal content
+                for part in message["content"]:
+                    if isinstance(part, str):
+                        st.markdown(part)
+                    elif isinstance(part, Image.Image):
+                        st.image(part)
+            else:
                 st.markdown(message["content"])
+    elif message["role"] == "assistant":
+        with st.chat_message("assistant"):
+            st.markdown(message["content"])
 
-def handle_file_uploads(uploaded_files):
-    """Processes uploaded files and returns a list of content parts."""
-    user_content = []
-    if uploaded_files:
-        for uploaded_file in uploaded_files:
-            file_extension = uploaded_file.name.split(".")[-1].lower()
-            
-            if file_extension in ["jpg", "jpeg", "png"]:
-                image = Image.open(uploaded_file)
-                user_content.append(image)
-            elif file_extension == "pdf":
-                try:
-                    pdf_reader = PyPDF2.PdfReader(BytesIO(uploaded_file.getvalue()))
-                    pdf_text = "".join(p.extract_text() or "" for p in pdf_reader.pages)
-                    user_content.append(f"Content from PDF: {pdf_text}")
-                except Exception as e:
-                    st.error(f"Error reading PDF: {e}")
-                    user_content.append(f"Could not read PDF. Error: {e}")
-            elif file_extension in ["doc", "docx"]:
-                try:
-                    doc = docx.Document(uploaded_file)
-                    doc_text = " ".join(p.text for p in doc.paragraphs)
-                    user_content.append(f"Content from Word document: {doc_text}")
-                except Exception as e:
-                    st.error(f"Error reading Word document: {e}")
-                    user_content.append(f"Could not read Word document. Error: {e}")
-    return user_content
 
-# Main app logic
-setup_app()
-display_messages()
-
+# Create a chat input field to allow the user to enter a message.
 prompt_input = st.chat_input(
     "Say something and/or attach an image",
     accept_file=True,
     file_type=["jpg", "jpeg", "png", "pdf", "doc", "docx"],
 )
 
-if prompt_input:
-    # Get user text and file content
-    user_content_list = []
-    if prompt_input.text:
-        user_content_list.append(prompt_input.text)
-    
-    file_content = handle_file_uploads(prompt_input.get("files", []))
-    if file_content:
-        user_content_list.extend(file_content)
+if prompt_input and prompt_input.text:
+    # Create the user message content.
+    user_content = []
 
-    # Display the user's message
+    # Check for uploaded files
+    if prompt_input["files"]:
+        uploaded_file = prompt_input["files"][0]
+        file_extension = uploaded_file.name.split(".")[-1].lower()
+
+        # Handle images
+        if file_extension in ["jpg", "jpeg", "png"]:
+            image = Image.open(uploaded_file)
+            user_content.append(image)
+            with st.chat_message("user"):
+                st.image(image)
+
+        # Handle PDFs
+        elif file_extension == "pdf":
+            pdf_text = ""
+            try:
+                # We need to use BytesIO to read the file in-memory
+                pdf_reader = PyPDF2.PdfReader(BytesIO(uploaded_file.getvalue()))
+                for page in pdf_reader.pages:
+                    pdf_text += page.extract_text() or ""
+                user_content.append(f"Content from PDF: {pdf_text}")
+                with st.chat_message("user"):
+                    st.success("PDF processed successfully.")
+            except Exception as e:
+                st.error(f"Error reading PDF: {e}")
+                user_content.append(f"Could not read PDF. Error: {e}")
+                
+        # Handle Word documents
+        elif file_extension in ["doc", "docx"]:
+            doc_text = ""
+            try:
+                # Streamlit's UploadedFile object is file-like.
+                # docx library can read from it directly.
+                doc = docx.Document(uploaded_file)
+                for paragraph in doc.paragraphs:
+                    doc_text += paragraph.text + " "
+                user_content.append(f"Content from Word document: {doc_text}")
+                with st.chat_message("user"):
+                    st.success("Word document processed successfully.")
+            except Exception as e:
+                st.error(f"Error reading Word document: {e}")
+                user_content.append(f"Could not read Word document. Error: {e}")
+    
+    # Add the text from the prompt.
+    user_content.append(prompt_input.text)
+    
+    # Store and display the user message in session state.
+    st.session_state.messages.append({"role": "user", "content": user_content})
     with st.chat_message("user"):
         st.markdown(prompt_input.text)
+    # --- Prepare Messages for Gemini API ---
+    model_messages = []
+    for msg in st.session_state.messages:
+        if msg["role"] == "system":
+            # The Gemini API doesn't have a "system" role, so we prepend
+            # the system instruction to the first user message.
+            continue
+
+        role = "model" if msg["role"] == "assistant" else "user"
+        parts = []
+
+        if isinstance(msg["content"], list):
+            for part in msg["content"]:
+                if isinstance(part, str):
+                    parts.append(part)
+                elif isinstance(part, Image.Image):
+                    parts.append(part)
+        else:
+            parts.append(msg["content"])
+        
+        model_messages.append({"role": role, "parts": parts})
     
-    # Get LLM response
-    get_llm_response(user_input_content=user_content_list)
-    st.rerun()
+    # Add the system prompt to the first user message parts.
+    if st.session_state.messages and st.session_state.messages[0]["role"] == "system":
+        system_instruction = st.session_state.messages[0]["content"]
+        if model_messages:
+            model_messages[0]["parts"].insert(0, system_instruction)
+
+    try:
+        model = genai.GenerativeModel("gemini-1.5-flash")
+        
+        # Prepare the messages for the Gemini API call.
+        # This part requires careful formatting for multimodal input.
+        model_messages = []
+        for msg in st.session_state.messages:
+            role = "model" if msg["role"] == "assistant" else "user"
+            
+            # The API's 'parts' list can contain both text and images.
+            parts = []
+            if isinstance(msg["content"], list):
+                for part in msg["content"]:
+                    if isinstance(part, str):
+                        parts.append(part)
+                    elif isinstance(part, Image.Image):
+                        parts.append(part)
+            else:
+                # Handle simple text messages.
+                parts.append(msg["content"])
+            
+            model_messages.append({"role": role, "parts": parts})
+            
+        # The Gemini API uses `generate_content` for streaming.
+        response_stream = model.generate_content(
+            model_messages,
+            stream=True
+        )
+
+        with st.chat_message("assistant"):
+            full_response = ""
+            for chunk in response_stream:
+                if chunk.text:
+                    full_response += chunk.text
+                    # st.write(chunk.text, end="")
+            st.markdown(full_response)
+            save_data(db_file_name, username, prompt_input.text, full_response)
+        
+        # Add the assistant's response to the chat history.
+        st.session_state.messages.append({"role": "assistant", "content": full_response})
+
+    except Exception as e:
+        st.error(f"An error occurred: {e}")
