@@ -47,10 +47,10 @@ else:
 # Initialize the chat session with a system prompt when the app loads.
 # This ensures a continuous chat history with the system instruction.
 if "chat" not in st.session_state:
-    model = genai.GenerativeModel("gemini-1.5-pro-001")
+    #model = genai.GenerativeModel("gemini-1.5-pro-001")
+    model = genai.GenerativeModel("gemini-1.5-pro-001", system_instruction=system_prompt)
     st.session_state.chat = model.start_chat(
-        history=[],
-        SystemInstruction=system_prompt
+        history=[]
     )
     # The history will be populated by retrieve_data
     db_data = retrieve_data(db_file_name)
