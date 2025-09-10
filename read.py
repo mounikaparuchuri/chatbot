@@ -33,13 +33,20 @@ def setup_db(db_file):
         conn.close()
 
 # Function to save data to the database
-def save_data(db_file, username, request, response):
+def save_data(db_file, username, user_message_content, response):
     conn = create_connection(db_file)
+
+        # Convert the user message content to a JSON string if it's a list
+    if isinstance(user_message_content, list):
+        # We only save text content. Images and other objects are discarded for DB storage.
+        text_content = " ".join([part for part in user_message_content if isinstance(part, str)])
+    else:
+        text_content = user_message_content
     if conn:
         try:
             c = conn.cursor()
             c.execute("INSERT INTO chat_log (username, request, response) VALUES (?, ?, ?)",
-                      (username, request, response))
+                      (username, text_content, response))
             conn.commit()
         except sqlite3.Error as e:
             st.error(f"Error saving data to database: {e}")
