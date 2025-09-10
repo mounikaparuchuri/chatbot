@@ -37,7 +37,7 @@ def setup_app():
         st.session_state.messages = retrieve_data(db_file_name) or []
         
     # If there's no chat history and a system prompt exists, send a hidden initial message
-    get_llm_response(user_input_content=st.session_state.messages)
+    get_llm_response(user_input_content=[])
 
 def get_llm_response(user_input_content=None):
     """Prepares and sends messages to the LLM, then handles the response."""
