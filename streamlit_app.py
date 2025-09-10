@@ -49,12 +49,13 @@ def get_llm_response(user_input_content=None, initial_prompt=None):
     model_messages = []
     
     # Add the system prompt to the very first message for context.
+    # For subsequent user messages
+    user_parts = user_input_content if isinstance(user_input_content, list) else [user_input_content]
     # The Gemini API doesn't have a dedicated system role, so we prepend it to the user's message.
     if initial_prompt:
         user_parts.insert(0, [initial_prompt])
 
-    # For subsequent user messages
-    user_parts = user_input_content if isinstance(user_input_content, list) else [user_input_content]
+
     # Add the system prompt to the current message if it exists
     model_messages.append({"role": "user", "parts": user_parts})
 
