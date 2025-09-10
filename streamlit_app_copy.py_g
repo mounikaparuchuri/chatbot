@@ -9,6 +9,7 @@ from read import setup_db, save_data, retrieve_data
 db_file_name = 'chat_history.db'
 username = ''
 
+# if no username param throw error.
 # Retrieve the query parameters from the URL.
 query_params = st.query_params
 if "username" in query_params:
@@ -21,67 +22,36 @@ if "username" in query_params:
         "Find My Chapter 3 chatbot."
     )
 else:
+    raise ValueError("This is my error message.")
     st.title("💬 Chatbot")
     st.write(
         "error occured"
     )
-    st.stop
+
+# Create a session state variable to store the chat messages.
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+    print("Messages is empty")
+    #Retrieve message history from db when chat histpry is empty.
+    data = retrieve_data(db_file_name)
+    # Check if data is a list of messages and loop through it.
+    if data and isinstance(data, list):
+        # 'data' should be a list of dictionaries, each representing a message
+        for message in data:
+            # Assuming each message in the DB is a dict with 'role' and 'content' keys
+            st.session_state.messages.append(message)
+
+# Retrieve the query parameters from the URL.
+query_params = st.query_params
+if "pname" in query_params:
+    systempromptname = query_params["pname"]
+    system_prompt = st.secrets[systempromptname]
+    if not st.session_state.messages or st.session_state.messages[0]["role"] != "system":
+        st.session_state.messages.insert(0, {"role": "system", "content": system_prompt})
 
 # Configure the Google Generative AI client with your API key
 GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
 genai.configure(api_key=GEMINI_API_KEY)
-
-# Get the system prompt from secrets.
-system_prompt = ""
-if "pname" in query_params:
-    system_prompt_name = query_params["pname"]
-    system_prompt = st.secrets[system_prompt_name]
-else:
-    #raise ValueError("System prompt name not provided in URL.")
-    st.title("💬 Chatbot")
-    st.write(
-        "error occured. missing name"
-    )
-    st.stop
-
-# Initialize the chat session with a system prompt when the app loads.
-# This ensures a continuous chat history with the system instruction.
-if "chat" not in st.session_state:
-    model = genai.GenerativeModel("gemini-1.5-pro-001")
-    st.session_state.chat = model.start_chat(
-        history=[],
-        system_instruction=system_prompt
-    )
-    # The history will be populated by retrieve_data
-    db_data = retrieve_data(db_file_name)
-    if db_data and isinstance(db_data, list):
-        # We need to correctly load the history into the chat object.
-        # The history in `start_chat` is a list of dicts with 'role' and 'parts'.
-        # We assume `retrieve_data` returns data in a compatible format.
-        # We need to map our saved data format to Gemini's expected format.
-        # The `start_chat` method can be initialized with history.
-        # So we create a new chat object with the retrieved history.
-        # This is a bit of a workaround since you can't append to a live session's history.
-        history_for_new_chat = []
-        for msg in db_data:
-            role = "model" if msg["role"] == "assistant" else "user"
-            history_for_new_chat.append({"role": role, "parts": [msg["content"]]})
-        
-        # Re-initialize the chat session with the loaded history.
-        st.session_state.chat = model.start_chat(
-            history=history_for_new_chat,
-            system_instruction=system_prompt
-        )
-
-# Create a session state variable to store the chat messages for display.
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-    # If the chat object was loaded with history from the DB, populate the display messages.
-    if st.session_state.chat.history:
-        for msg in st.session_state.chat.history:
-            role = "assistant" if msg.role == "model" else "user"
-            st.session_state.messages.append({"role": role, "content": msg.parts[0].text})
-            
 
 # Display the existing chat messages.
 for message in st.session_state.messages:
@@ -164,12 +134,60 @@ if prompt_input and prompt_input.text:
     st.session_state.messages.append({"role": "user", "content": user_content})
     with st.chat_message("user"):
         st.markdown(prompt_input.text)
+    # --- Prepare Messages for Gemini API ---
+    model_messages = []
+    for msg in st.session_state.messages:
+        if msg["role"] == "system":
+            # The Gemini API doesn't have a "system" role, so we prepend
+            # the system instruction to the first user message.
+            continue
 
-    # Use the `send_message` method on the chat object.
-    # This automatically handles the history for you.
+        role = "model" if msg["role"] == "assistant" else "user"
+        parts = []
+
+        if isinstance(msg["content"], list):
+            for part in msg["content"]:
+                if isinstance(part, str):
+                    parts.append(part)
+                elif isinstance(part, Image.Image):
+                    parts.append(part)
+        else:
+            parts.append(msg["content"])
+        
+        model_messages.append({"role": role, "parts": parts})
+    
+    # Add the system prompt to the first user message parts.
+    if st.session_state.messages and st.session_state.messages[0]["role"] == "system":
+        system_instruction = st.session_state.messages[0]["content"]
+        if model_messages:
+            model_messages[0]["parts"].insert(0, system_instruction)
+
     try:
-        response_stream = st.session_state.chat.send_message(
-            user_content,
+        model = genai.GenerativeModel(model_name="gemini-1.5-flash", system_instruction=system_instruction)
+        
+        # Prepare the messages for the Gemini API call.
+        # This part requires careful formatting for multimodal input.
+        model_messages = []
+        for msg in st.session_state.messages:
+            role = "model" if msg["role"] == "assistant" else "user"
+            
+            # The API's 'parts' list can contain both text and images.
+            parts = []
+            if isinstance(msg["content"], list):
+                for part in msg["content"]:
+                    if isinstance(part, str):
+                        parts.append(part)
+                    elif isinstance(part, Image.Image):
+                        parts.append(part)
+            else:
+                # Handle simple text messages.
+                parts.append(msg["content"])
+            
+            model_messages.append({"role": role, "parts": parts})
+            
+        # The Gemini API uses `generate_content` for streaming.
+        response_stream = model.generate_content(
+            model_messages,
             stream=True
         )
 
