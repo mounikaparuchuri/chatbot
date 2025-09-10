@@ -37,10 +37,9 @@ def setup_app():
         st.session_state.messages = retrieve_data(db_file_name) or []
         
     # If there's no chat history and a system prompt exists, send a hidden initial message
-    if not st.session_state.messages and "system_prompt" in st.session_state:
-        get_llm_response(initial_prompt=st.session_state.system_prompt)
+    get_llm_response(st.session_state.messages)
 
-def get_llm_response(user_input_content=None, initial_prompt=None):
+def get_llm_response(user_input_content=None):
     """Prepares and sends messages to the LLM, then handles the response."""
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
     model = genai.GenerativeModel(model_name="gemini-2.0-flash")
@@ -52,8 +51,8 @@ def get_llm_response(user_input_content=None, initial_prompt=None):
     # For subsequent user messages
     user_parts = user_input_content if isinstance(user_input_content, list) else [user_input_content]
     # The Gemini API doesn't have a dedicated system role, so we prepend it to the user's message.
-    if initial_prompt:
-        user_parts.insert(0, initial_prompt)
+    if "system_prompt" in st.session_state:
+        user_parts.insert(0, st.session_state.system_prompt)
 
 
     # Add the system prompt to the current message if it exists
