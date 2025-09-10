@@ -58,19 +58,19 @@ def get_llm_response(user_input_content=None):
     # Add the system prompt to the current message if it exists
     model_messages.append({"role": "user", "parts": user_parts})
     
-    # Add previous chat history for continuity
-    for msg in st.session_state.messages:
-        # Check if 'msg' is a dictionary before trying to access its keys
-        if isinstance(msg, dict):
-            role = "model" if msg["role"] == "assistant" else "user"
-            parts = msg["content"] if isinstance(msg["content"], list) else [msg["content"]]
+    # # Add previous chat history for continuity
+    # for msg in st.session_state.messages:
+    #     # Check if 'msg' is a dictionary before trying to access its keys
+    #     if isinstance(msg, dict):
+    #         role = "model" if msg["role"] == "assistant" else "user"
+    #         parts = msg["content"] if isinstance(msg["content"], list) else [msg["content"]]
         
-            # Exclude the system prompt from the history
-            if msg.get("role") != "system":
-                model_messages.append({"role": role, "parts": parts})
-        else:
-            # Optional: Print a warning or log the invalid message
-            print(f"Skipping invalid message of type: {type(msg)}")
+    #         # Exclude the system prompt from the history
+    #         if msg.get("role") != "system":
+    #             model_messages.append({"role": role, "parts": parts})
+    #     else:
+    #         # Optional: Print a warning or log the invalid message
+    #         print(f"Skipping invalid message of type: {type(msg)}")
     
     try:
         response_stream = model.generate_content(model_messages, stream=True)
@@ -79,7 +79,7 @@ def get_llm_response(user_input_content=None):
             full_response = ""
             for chunk in response_stream:
                 full_response += chunk.text
-                st.markdown(full_response)
+            st.markdown(full_response)
         
         # Save the new user message and the assistant's response
         if user_input_content:
