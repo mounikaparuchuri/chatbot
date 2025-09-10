@@ -72,8 +72,6 @@ def get_llm_response(user_input_content=None):
             # Optional: Print a warning or log the invalid message
             print(f"Skipping invalid message of type: {type(msg)}")
     
-    json_dump = json.dumps(model_messages, indent=2)
-    print(json_dump)
     try:
         response_stream = model.generate_content(model_messages, stream=True)
         
