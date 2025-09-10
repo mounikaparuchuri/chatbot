@@ -54,7 +54,7 @@ def get_llm_response(user_input_content=None, initial_prompt=None):
     # This logic handles both initial and subsequent messages
     if initial_prompt:
         # For the very first message on page load
-        model_messages.append({"role": "user", "parts": [system_instruction]})
+        model_messages.append({"role": "system", "parts": [system_instruction]})
     elif user_input_content:
         # For subsequent user messages
         user_parts = user_input_content if isinstance(user_input_content, list) else [user_input_content]
