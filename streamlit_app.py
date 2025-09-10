@@ -50,7 +50,7 @@ if "chat" not in st.session_state:
     model = genai.GenerativeModel("gemini-1.5-pro-001")
     st.session_state.chat = model.start_chat(
         history=[],
-        system_instruction=system_prompt
+        SystemInstruction=system_prompt
     )
     # The history will be populated by retrieve_data
     db_data = retrieve_data(db_file_name)
@@ -70,7 +70,7 @@ if "chat" not in st.session_state:
         # Re-initialize the chat session with the loaded history.
         st.session_state.chat = model.start_chat(
             history=history_for_new_chat,
-            system_instruction=system_prompt
+            SystemInstruction=system_prompt
         )
 
 # Create a session state variable to store the chat messages for display.
