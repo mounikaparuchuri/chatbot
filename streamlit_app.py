@@ -167,7 +167,6 @@ if prompt_input and prompt_input.text:
         
         # Prepare the messages for the Gemini API call.
         # This part requires careful formatting for multimodal input.
-        model_messages = []
         for msg in st.session_state.messages:
             role = "model" if msg["role"] == "assistant" else "user"
             
