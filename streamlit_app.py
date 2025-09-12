@@ -1,6 +1,5 @@
 import streamlit as st
 import google.generativeai as genai
-from google.generativeai import Chat
 from PIL import Image
 import PyPDF2
 import docx
