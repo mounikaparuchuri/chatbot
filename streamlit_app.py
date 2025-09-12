@@ -1,5 +1,6 @@
 import streamlit as st
 import google.generativeai as genai
+from google.generativeai.types import GenerationConfig
 from PIL import Image
 import PyPDF2
 import docx
@@ -46,8 +47,8 @@ query_params = st.query_params
 if "pname" in query_params:
     systempromptname = query_params["pname"]
     system_prompt = st.secrets[systempromptname]
-    if not st.session_state.messages or st.session_state.messages[0]["role"] != "system":
-        st.session_state.messages.insert(0, {"role": "system", "content": system_prompt})
+    # if not st.session_state.messages or st.session_state.messages[0]["role"] != "system":
+    #     st.session_state.messages.insert(0, {"role": "system", "content": system_prompt})
 
 # Configure the Google Generative AI client with your API key
 GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
@@ -157,13 +158,14 @@ if prompt_input and prompt_input.text:
         model_messages.append({"role": role, "parts": parts})
     
     # Add the system prompt to the first user message parts.
+    system_instruction = system_prompt
     if st.session_state.messages and st.session_state.messages[0]["role"] == "system":
         system_instruction = st.session_state.messages[0]["content"]
         if model_messages:
             model_messages[0]["parts"].insert(0, system_instruction)
 
     try:
-        model = genai.GenerativeModel(model_name="gemini-1.5-flash", system_instruction=system_instruction)
+        model = genai.GenerativeModel(model_name="gemini-1.5-flash")
         
         # Prepare the messages for the Gemini API call.
         # This part requires careful formatting for multimodal input.
