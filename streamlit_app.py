@@ -48,11 +48,7 @@ else:
 # This ensures a continuous chat history with the system instruction.
 if "chat" not in st.session_state:
     #model = genai.GenerativeModel("gemini-1.5-pro-001")
-    model = genai.GenerativeModel("gemini-1.5-pro-001",
-    system_instructions = {
-        "role": "system",
-        "content": system_prompt
-    })
+    model = genai.GenerativeModel("gemini-1.5-pro-001", system_instructions = { "role": "system", "content": system_prompt})
 
     # Start a chat session with system instructions
     # chat_session = Chat.start_chat(messages=[system_instructions])
