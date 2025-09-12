@@ -47,8 +47,8 @@ query_params = st.query_params
 if "pname" in query_params:
     systempromptname = query_params["pname"]
     system_prompt = st.secrets[systempromptname]
-    # if not st.session_state.messages or st.session_state.messages[0]["role"] != "system":
-    #     st.session_state.messages.insert(0, {"role": "system", "content": system_prompt})
+    if not st.session_state.messages or st.session_state.messages[0]["role"] != "system":
+        st.session_state.messages.insert(0, {"role": "system", "content": system_prompt})
 
 # Configure the Google Generative AI client with your API key
 GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
