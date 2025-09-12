@@ -1,5 +1,6 @@
 import streamlit as st
 import google.generativeai as genai
+from google.generativeai import Chat
 from PIL import Image
 import PyPDF2
 import docx
@@ -48,7 +49,30 @@ else:
 # This ensures a continuous chat history with the system instruction.
 if "chat" not in st.session_state:
     #model = genai.GenerativeModel("gemini-1.5-pro-001")
-    model = genai.GenerativeModel("gemini-1.5-pro-001", system_instruction=system_prompt)
+    model = genai.GenerativeModel("gemini-1.5-pro-001")
+    # Define system instructions
+    system_instructions = {
+        "role": "system",
+        "content": system_prompt
+    }
+
+    # Start a chat session with system instructions
+    chat_session = Chat.start_chat(messages=[system_instructions])
+
+# # User sends a message
+# user_message = {"role": "user", "content": "Can you explain what Vertex AI is?"}
+# response = chat_session.send_message(user_message)
+
+# # Print the assistant's response
+# print("Assistant:", response["content"])
+
+# # Continue the conversation
+# follow_up_message = {"role": "user", "content": "How can I use it for machine learning?"}
+# response = chat_session.send_message(follow_up_message)
+
+# # Print the follow-up response
+# print("Assistant:", response["content"])
+
     st.session_state.chat = model.start_chat(
         history=[]
     )
@@ -69,8 +93,7 @@ if "chat" not in st.session_state:
         
         # Re-initialize the chat session with the loaded history.
         st.session_state.chat = model.start_chat(
-            history=history_for_new_chat,
-            SystemInstruction=system_prompt
+            history=history_for_new_chat
         )
 
 # Create a session state variable to store the chat messages for display.
