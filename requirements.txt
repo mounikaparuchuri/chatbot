@@ -1,6 +1,6 @@
 streamlit
 OpenAI
-google-generativeai==0.3.0
+google-genai
 PyPDF2
 python-docx
 Pillow
