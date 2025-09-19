@@ -16,7 +16,6 @@ from google.genai.types import (
 from PIL import Image
 import PyPDF2
 import docx
-import json
 from io import BytesIO
 from read import setup_db, save_data, retrieve_data
 
@@ -223,17 +222,58 @@ prompt_input = st.chat_input(
     file_type=["jpg", "jpeg", "png", "pdf", "doc", "docx"],
 )
 
-if prompt_input:
-    # Get user text and file content
-    user_content_list = []
-    if prompt_input.text:
-        user_content_list.append(prompt_input.text)
-    
-    file_content = handle_file_uploads(prompt_input.get("files", []))
-    if file_content:
-        user_content_list.extend(file_content)
+if prompt_input and prompt_input.text:
+    # Create the user message content.
+    user_content = []
 
-    # Display the user's message
+    # Check for uploaded files
+    if prompt_input["files"]:
+        uploaded_file = prompt_input["files"][0]
+        file_extension = uploaded_file.name.split(".")[-1].lower()
+
+        # Handle images
+        if file_extension in ["jpg", "jpeg", "png"]:
+            image = Image.open(uploaded_file)
+            user_content.append(image)
+            with st.chat_message("user"):
+                st.image(image)
+
+        # Handle PDFs
+        elif file_extension == "pdf":
+            pdf_text = ""
+            try:
+                # We need to use BytesIO to read the file in-memory
+                pdf_reader = PyPDF2.PdfReader(BytesIO(uploaded_file.getvalue()))
+                for page in pdf_reader.pages:
+                    pdf_text += page.extract_text() or ""
+                user_content.append(f"Content from PDF: {pdf_text}")
+                with st.chat_message("user"):
+                    st.success("PDF processed successfully.")
+            except Exception as e:
+                st.error(f"Error reading PDF: {e}")
+                user_content.append(f"Could not read PDF. Error: {e}")
+                
+        # Handle Word documents
+        elif file_extension in ["doc", "docx"]:
+            doc_text = ""
+            try:
+                # Streamlit's UploadedFile object is file-like.
+                # docx library can read from it directly.
+                doc = docx.Document(uploaded_file)
+                for paragraph in doc.paragraphs:
+                    doc_text += paragraph.text + " "
+                user_content.append(f"Content from Word document: {doc_text}")
+                with st.chat_message("user"):
+                    st.success("Word document processed successfully.")
+            except Exception as e:
+                st.error(f"Error reading Word document: {e}")
+                user_content.append(f"Could not read Word document. Error: {e}")
+    
+    # Add the text from the prompt.
+    user_content.append(prompt_input.text)
+    
+    # Store and display the user message in session state.
+    st.session_state.messages.append({"role": "user", "content": user_content})
     with st.chat_message("user"):
         st.markdown(prompt_input.text)
 
