@@ -106,3 +106,38 @@ def retrieve_data(db_file):
             if conn:
                 conn.close()
     return []
+
+
+def delete_chat_log(username, db_name):
+    """
+    Deletes a specific chat log entry from the database by its ID.
+
+    Args:
+        log_id (int): The primary key (id) of the log entry to delete.
+    """
+
+    conn = None
+    try:
+        # Connect to the SQLite database
+        conn = sqlite3.connect(db_name)
+        cursor = conn.cursor()
+
+        # Prepare and execute the DELETE statement
+        sql = "DELETE FROM chat_log WHERE username = ?"
+        cursor.execute(sql, (username,))
+
+        # Commit the changes to the database
+        conn.commit()
+        
+        # Check if any row was actually deleted
+        if cursor.rowcount > 0:
+            print(f"Successfully deleted chat log with ID: {username}")
+        else:
+            print(f"No chat log found with ID: {username}")
+
+    except sqlite3.Error as e:
+        print(f"Database error: {e}")
+    finally:
+        # Always close the connection
+        if conn:
+            conn.close()

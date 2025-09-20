@@ -17,7 +17,7 @@ from PIL import Image
 import PyPDF2
 import docx
 from io import BytesIO
-from read import setup_db, save_data, retrieve_data
+from read import setup_db, save_data, retrieve_data, delete_chat_log
 
 # Global variables
 global username, db_file_name
@@ -32,6 +32,12 @@ def setup_app(prompt_input=None):
     if "pname" in query_params:
         system_prompt_name = query_params["pname"]
         st.session_state.system_prompt = st.secrets.get(system_prompt_name)
+
+    if "username" in query_params and "clearall" in query_params:
+        username = query_params["username"]
+        db_file_name = f"{username}_chat_history.db"
+        delete_chat_log(username, db_file_name)
+
 
     # Initialize messages and load history if it's the first run
     if "messages" not in st.session_state:
@@ -64,97 +70,26 @@ def setup_app(prompt_input=None):
         )
     ]
     chat = client.chats.create(model = model, config = generate_content_config,)
-    response = chat.send_message(prompt_input)
+    response = chat.send_message(prompt_input.text)
+
+    with st.chat_message("user"):
+        st.markdown(prompt_input.text)
     print(response.text)
 
-    #     # Save the new user message and the assistant's response
-    # if st.session_state.messages:
-    #     save_data(db_file_name, username, st.session_state.messages, response)
-    #     st.session_state.messages.append({"role": "user", "content": st.session_state.messages})
-    #     st.session_state.messages.append({"role": "assistant", "content": response})
-    # else: # This branch handles the initial response from the system prompt
-    #     st.session_state.messages.append({"role": "assistant", "content": response})
+        # Add the text from the prompt.
+    user_content.append(prompt_input.text)
 
 
+        # Save the new user message and the assistant's response
+    if st.session_state.messages:
+        save_data(db_file_name, username, st.session_state.messages, response.text)
+        st.session_state.messages.append({"role": "user", "content": st.session_state.messages})
+        st.session_state.messages.append({"role": "assistant", "content": response.text})
+    else: # This branch handles the initial response from the system prompt
+        st.session_state.messages.append({"role": "assistant", "content": response.text})
 
-def get_llm_response(user_input_content=None):
-    """Prepares and sends messages to the LLM, then handles the response."""
-    client = genai.Client(
-        api_key=st.secrets["GEMINI_API_KEY"],
-    )
-    
-    generate_content_config = types.GenerateContentConfig(
-        system_instruction=st.session_state.system_prompt,
-        temperature = 1,
-        top_p = 0.95,
-        max_output_tokens = 8192,
-        safety_settings = [types.SafetySetting(
-        category="HARM_CATEGORY_HATE_SPEECH",
-        threshold="OFF"
-        ),types.SafetySetting(
-        category="HARM_CATEGORY_DANGEROUS_CONTENT",
-        threshold="OFF"
-        ),types.SafetySetting(
-        category="HARM_CATEGORY_SEXUALLY_EXPLICIT",
-        threshold="OFF"
-        ),types.SafetySetting(
-        category="HARM_CATEGORY_HARASSMENT",
-        threshold="OFF"
-        )],
-    )
-    model = "gemini-2.0-flash-lite-001"
-    # This list will be sent to the Gemini API
-    model_messages = []
-    
-    # Add the system prompt to the very first message for context.
-    # For subsequent user messages
-    user_parts = user_input_content if isinstance(user_input_content, list) else [user_input_content]
-    # The Gemini API doesn't have a dedicated system role, so we prepend it to the user's message.
-    if "system_prompt" in st.session_state:
-        user_parts.insert(0, st.session_state.system_prompt)
+    display_messages()
 
-
-    # Add the system prompt to the current message if it exists
-    model_messages.append({"role": "user", "parts": user_parts})
-    
-    # Add previous chat history for continuity
-    for msg in st.session_state.messages:
-        # Check if 'msg' is a dictionary before trying to access its keys
-        if isinstance(msg, dict):
-            role = "model" if msg["role"] == "assistant" else "user"
-            parts = msg["content"] if isinstance(msg["content"], list) else [msg["content"]]
-        
-            # Exclude the system prompt from the history
-            if msg.get("role") != "system":
-                model_messages.append({"role": role, "parts": parts})
-        else:
-            # Optional: Print a warning or log the invalid message
-            print(f"Skipping invalid message of type: {type(msg)}")
-    
-    json_dump = json.dumps(model_messages, indent=2)
-    print(json_dump)
-    try:
-        # response_stream = model.generate_content(model=model, contents=model_messages, config=GenerateContentConfig(
-        #         system_instruction=st.session_state.system_prompt,
-        #     ),stream=True)
-        
-        # with st.chat_message("assistant"):
-        #     full_response = ""
-        #     for chunk in response_stream:
-        #         full_response += chunk.text
-        #         st.markdown(full_response)
-        
-        # contents = [
-        #     types.Content(
-        #     role="user",
-        #     parts=model_messages
-        #     )
-        # ]
-        chat = client.chats.create(model = model, config = generate_content_config,)
-        response = chat.send_message(model_messages)
-    
-    except Exception as e:
-        st.error(f"An error occurred: {e}")
 
 def display_messages():
     """Displays chat messages from session state, excluding the system prompt."""
@@ -268,14 +203,6 @@ if prompt_input and prompt_input.text:
             except Exception as e:
                 st.error(f"Error reading Word document: {e}")
                 user_content.append(f"Could not read Word document. Error: {e}")
-    
-    # Add the text from the prompt.
-    user_content.append(prompt_input.text)
-    
-    # Store and display the user message in session state.
-    st.session_state.messages.append({"role": "user", "content": user_content})
-    with st.chat_message("user"):
-        st.markdown(prompt_input.text)
 
     # Main app logic
     setup_app(prompt_input)
@@ -283,4 +210,4 @@ if prompt_input and prompt_input.text:
     
     # Get LLM response
     # get_llm_response(user_input_content=user_content_list)
-    st.rerun()
+    # st.rerun()
