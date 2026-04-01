@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Claude Chat Interface</title>
     <style>
-        * {
+        * {f
             margin: 0;
             padding: 0;
             box-sizing: border-box;
@@ -488,6 +488,8 @@
             border-color: #0d5c57;
         }
     </style>
+    <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/legacy/build/pdf.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mammoth@1.9.0/mammoth.browser.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 </head>
 <body>
     <div class="header">
@@ -514,7 +516,7 @@
     <div class="chat-container" id="chatContainer">
         <div class="message assistant" id="welcomeMessage">
             <div class="message-avatar">C</div>
-            <div class="message-content">Welcome to Chapter 3's Readiness Assessment.<br><br>I am going to guide you through a series of questions to help you understand how ready you are to begin exploring your next career chapter. Please base your responses based on how you feel today.<br><br>The process should take no more than 10-15 minutes and at the end you'll receive your readiness profile. Please note, there are no right or wrong answers.<br><br>If at any point you do not understand the question, please let me know.<br><br>click the start conversation button below.</div>
+            <div class="message-content">Welcome to Chapter 3's Needs and Desires Explorer.<br><br>click the start conversation button below.</div>
         </div>
     </div>
 
@@ -583,13 +585,13 @@
         const themeIcon = document.getElementById('themeIcon');
         const themeText = document.getElementById('themeText');
 
-        const WEBHOOK_URL = 'https://n8n.paruchuri.net/webhook/09660708-aa2a-4798-8ffa-d698342ea76f/chat';
-
+        const WEBHOOK_URL = 'https://n8n.paruchuri.net/webhook/57715fed-379f-4078-a8a2-5b71dbde70e3/chat';
+        
         const newChatButton = document.getElementById('newChatButton');
 
         const WELCOME_MESSAGE_HTML = '<div class="message assistant">' +
                     '<div class="message-avatar">C<\/div>' +
-                    '<div class="message-content">Welcome to Chapter 3\'s Readiness Assessment.<br><br>I am going to guide you through a series of questions to help you understand how ready you are to begin exploring your next career chapter. Please base your responses based on how you feel today.<br><br>The process should take no more than 10-15 minutes and at the end you\'ll receive your readiness profile. Please note, there are no right or wrong answers.<br><br>If at any point you do not understand the question, please let me know.<br><br>Click on the button below.<\/div>' +
+                    '<div class="message-content">Welcome to Chapter 3\'s Needs and Desires Explorer.<br><br>Click the start conversation button below.<\/div>' +
                     '<\/div>';
 
         let attachedFiles = [];
@@ -597,8 +599,8 @@
 
         // URL params for session (iframe: ?user_id=...&course_id=...)
         const urlParams = new URLSearchParams(window.location.search);
-        const userId = '{{USER_ID}}';
-        const courseId = '{{COURSE_ID}}';
+        const userId = '{{USER_ID}}' || '';
+        const courseId = '{{COURSE_ID}}' || '';
 
         // ── Conversation starter button (only for new chat; with history we show input directly) ─────────────────────────
         function updateConversationStarterUI() {
@@ -653,7 +655,7 @@
             } else {
                 sessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
             }
-            localStorage.setItem('chatSessionId', sessionId);
+            localStorage.setItem('chatSessionId_gpt3', sessionId);
             console.log('New Chat – Session ID:', sessionId);
 
             // Clear UI
@@ -666,8 +668,8 @@
             attachedFiles = [];
             filePreviewContainer.innerHTML = '';
 
-            // Clear stored conversation if using local storage
-            localStorage.removeItem('chatHistory');
+            // Clear stored conversation if using local storage (GPT3-specific key)
+            localStorage.removeItem('chatHistory_gpt3');
 
             // Show and highlight the start conversation button (new chat state)
             hasHistory = false;
@@ -705,18 +707,18 @@
             if (e.target === startOverOverlay) closeStartOverModal();
         });
 
-        // ── Session ID ───────────────────────────────────────────
+        // ── Session ID (separate from chat_interface.html / n8n GPT3 session) ─
         // Use stored sessionId unless missing (then compute and store)
-        let sessionId = localStorage.getItem('chatSessionId');
+        let sessionId = localStorage.getItem('chatSessionId_gpt3');
         if (!sessionId) {
             if (userId && courseId) {
                 sessionId = `session_${userId}_${courseId}_${Math.random().toString(36).substring(2, 9)}`;
             } else {
                 sessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
             }
-            localStorage.setItem('chatSessionId', sessionId);
+            localStorage.setItem('chatSessionId_gpt3', sessionId);
         }
-        console.log('Session ID:', sessionId);
+        console.log('Session ID (GPT3):', sessionId);
 
         // ── Load recent conversation history on page load ─────────
         async function loadRecentMessages() {
@@ -886,6 +888,143 @@
             });
         }
 
+        /** Strip `data:mime;base64,` so n8n / Buffer.from(x, 'base64') accepts `files[].data`. */
+        function dataUrlToRawBase64(dataUrl) {
+            if (typeof dataUrl !== 'string') return '';
+            const i = dataUrl.indexOf(',');
+            return i >= 0 ? dataUrl.slice(i + 1) : dataUrl;
+        }
+
+        if (typeof pdfjsLib !== 'undefined') {
+            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/legacy/build/pdf.worker.min.js';
+        }
+
+        const MAX_EXTRACTED_FILE_TEXT = 450000;
+
+        function isDocxFile(file) {
+            const t = (file.type || '').toLowerCase();
+            const n = (file.name || '').toLowerCase();
+            return (
+                t === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+                || n.endsWith('.docx')
+            );
+        }
+
+        /** Legacy Word .doc (binary) — not supported in-browser; .docx works via Mammoth. */
+        function isLegacyWordDoc(file) {
+            const t = (file.type || '').toLowerCase();
+            const n = (file.name || '').toLowerCase();
+            if (n.endsWith('.docx')) return false;
+            return t === 'application/msword' || n.endsWith('.doc');
+        }
+
+        function isPdfFile(file) {
+            const t = (file.type || '').toLowerCase();
+            const n = (file.name || '').toLowerCase();
+            return t === 'application/pdf' || n.endsWith('.pdf');
+        }
+
+        /** Pull text from PDF so chatInput contains real content (many n8n agents only read chatInput). */
+        async function extractPdfTextForWebhook(file) {
+            if (typeof pdfjsLib === 'undefined') return null;
+            try {
+                const buf = await file.arrayBuffer();
+                const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+                let full = '';
+                for (let p = 1; p <= pdf.numPages; p++) {
+                    const page = await pdf.getPage(p);
+                    const content = await page.getTextContent();
+                    const line = content.items.map(function (item) { return item.str; }).join(' ');
+                    full += line + '\n\n';
+                }
+                let t = full.replace(/\s+\n/g, '\n').trim();
+                if (!t) return null;
+                if (t.length > MAX_EXTRACTED_FILE_TEXT) {
+                    t = t.slice(0, MAX_EXTRACTED_FILE_TEXT) + '\n\n[PDF text truncated for size]';
+                }
+                return t;
+            } catch (e) {
+                console.warn('PDF text extract failed:', e);
+                return null;
+            }
+        }
+
+        /** Word .docx → plain text for chatInput (same idea as PDF extraction). */
+        async function extractDocxTextForWebhook(file) {
+            if (typeof mammoth === 'undefined') return null;
+            try {
+                const buf = await file.arrayBuffer();
+                const result = await mammoth.extractRawText({ arrayBuffer: buf });
+                let t = (result.value || '').replace(/\r\n/g, '\n').trim();
+                if (!t) return null;
+                if (t.length > MAX_EXTRACTED_FILE_TEXT) {
+                    t = t.slice(0, MAX_EXTRACTED_FILE_TEXT) + '\n\n[Word document text truncated for size]';
+                }
+                return t;
+            } catch (e) {
+                console.warn('DOCX text extract failed:', e);
+                return null;
+            }
+        }
+
+        /** Inline into chatInput as UTF-8 text; binary types stay in files[] only. */
+        function isTextLikeFile(file) {
+            if (isPdfFile(file) || isDocxFile(file) || isLegacyWordDoc(file)) return false;
+            const t = (file.type || '').toLowerCase();
+            if (t.startsWith('text/')) return true;
+            if (t === 'application/json' || t === 'application/xml' || t.endsWith('+xml')) return true;
+            const n = (file.name || '').toLowerCase();
+            return /\.(txt|md|csv|json|log|xml|html?|yaml|yml|tsv|rtf)$/i.test(n);
+        }
+
+        function readFileAsText(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+                reader.onerror = () => reject(reader.error);
+                reader.readAsText(file);
+            });
+        }
+
+        /** Merges textarea text + file contents into one string for n8n (often only reads chatInput). */
+        async function buildChatInputForWebhook(baseMessage, fileArray) {
+            const parts = [];
+            let text = baseMessage == null ? '' : baseMessage;
+            if (typeof text !== 'string') text = String(text);
+            const trimmed = text.trim();
+            if (trimmed) parts.push(trimmed);
+            for (const file of fileArray) {
+                const label = file.name || 'attachment';
+                if (isTextLikeFile(file)) {
+                    try {
+                        const text = await readFileAsText(file);
+                        parts.push('\n\n--- File: ' + label + ' ---\n' + text);
+                    } catch (e) {
+                        parts.push('\n\n--- File: ' + label + ' (unreadable as text) ---');
+                    }
+                } else if (isPdfFile(file)) {
+                    const pdfText = await extractPdfTextForWebhook(file);
+                    if (pdfText) {
+                        parts.push('\n\n--- PDF resume/document: ' + label + ' (extracted text) ---\n' + pdfText);
+                    } else {
+                        parts.push('\n\n--- PDF: ' + label + ' (no text layer — likely scanned image). Raw bytes are still in JSON `files[]` for server-side OCR. ---');
+                    }
+                } else if (isDocxFile(file)) {
+                    const docText = await extractDocxTextForWebhook(file);
+                    if (docText) {
+                        parts.push('\n\n--- Word document (.docx): ' + label + ' (extracted text) ---\n' + docText);
+                    } else {
+                        parts.push('\n\n--- Word (.docx): ' + label + ' (could not extract text). Binary is still in JSON `files[]`. ---');
+                    }
+                } else if (isLegacyWordDoc(file)) {
+                    parts.push('\n\n--- Legacy Word (.doc): ' + label + ' — this page cannot read old .doc files in the browser. Save as .docx or PDF and re-upload. Binary is in `files[]`. ---');
+                } else {
+                    parts.push('\n\n[Attached: ' + label + ' — binary is in JSON `files[]` as raw Base64 in `data` (field `dataEncoding` is base64)]');
+                }
+            }
+            return parts.join('').trim();
+        }
+
         // ── Keyboard shortcut ────────────────────────────────────
         messageInput.addEventListener('keydown', function(e) {
             if (e.key === 'Enter' && !e.shiftKey) {
@@ -895,6 +1034,16 @@
         });
 
         sendButton.addEventListener('click', sendMessage);
+
+        messageInput.addEventListener('paste', function (e) {
+            const cd = e.clipboardData;
+            if (!cd || !cd.files || cd.files.length === 0) return;
+            e.preventDefault();
+            for (let i = 0; i < cd.files.length; i++) {
+                attachedFiles.push(cd.files[i]);
+            }
+            updateFilePreview();
+        });
 
         // ── Render a message bubble ──────────────────────────────
         function addMessage(content, isUser = false) {
@@ -918,8 +1067,10 @@
         }
 
         function formatMessage(text) {
-            if (!text) return '';
-
+            if (text == null) return '';
+            if (typeof text !== 'string') {
+                text = (typeof text === 'object' ? JSON.stringify(text, null, 2) : String(text));
+            }
             text = text.replace(/&/g, '&amp;')
                        .replace(/</g, '&lt;')
                        .replace(/>/g, '&gt;')
@@ -972,6 +1123,102 @@
             if (el) el.remove();
         }
 
+        /**
+         * n8n "Respond to Webhook" / AI Agent shapes vary: flat output, nested json/body,
+         * OpenAI choices, LangChain messages[], multimodal content arrays.
+         */
+        function extractN8nWebhookReply(raw, depth) {
+            depth = depth || 0;
+            if (depth > 12 || raw == null) return null;
+
+            if (typeof raw === 'string') return raw.trim() !== '' ? raw : null;
+
+            if (Array.isArray(raw)) {
+                for (let i = 0; i < raw.length; i++) {
+                    const r = extractN8nWebhookReply(raw[i], depth + 1);
+                    if (r) return r;
+                }
+                return null;
+            }
+
+            if (typeof raw !== 'object') {
+                const s = String(raw);
+                return s.trim() !== '' ? s : null;
+            }
+
+            if (raw.json != null) {
+                const r = extractN8nWebhookReply(raw.json, depth + 1);
+                if (r) return r;
+            }
+            if (raw.body != null) {
+                const r = extractN8nWebhookReply(raw.body, depth + 1);
+                if (r) return r;
+            }
+
+            const keyOrder = ['response', 'message', 'text', 'content', 'answer', 'result', 'reply', 'assistant'];
+            for (let i = 0; i < keyOrder.length; i++) {
+                const v = raw[keyOrder[i]];
+                if (v == null) continue;
+                if (typeof v === 'string' && v.trim() !== '') return v;
+                const nested = extractN8nWebhookReply(v, depth + 1);
+                if (nested) return nested;
+            }
+
+            if (raw.output != null) {
+                const o = raw.output;
+                if (typeof o === 'string' && o.trim() !== '') return o;
+                const nested = extractN8nWebhookReply(o, depth + 1);
+                if (nested) return nested;
+            }
+
+            if (Array.isArray(raw.choices) && raw.choices[0]) {
+                const m = raw.choices[0].message;
+                if (m && typeof m.content === 'string' && m.content.trim() !== '') return m.content;
+                if (m && Array.isArray(m.content)) {
+                    const joined = m.content.map(function (p) {
+                        if (typeof p === 'string') return p;
+                        if (p && p.type === 'text' && p.text) return p.text;
+                        return '';
+                    }).join('');
+                    if (joined.trim() !== '') return joined;
+                }
+            }
+
+            if (Array.isArray(raw.messages) && raw.messages.length) {
+                for (let j = raw.messages.length - 1; j >= 0; j--) {
+                    const msg = raw.messages[j];
+                    if (!msg || typeof msg !== 'object') continue;
+                    const role = (msg.role || msg.type || '').toLowerCase();
+                    if (role === 'user' || role === 'human' || role === 'system') continue;
+                    let c = msg.content;
+                    if (c == null && msg.kwargs) c = msg.kwargs.content;
+                    if (typeof c === 'string' && c.trim() !== '') return c;
+                    if (Array.isArray(c)) {
+                        const t = c.map(function (p) {
+                            if (typeof p === 'string') return p;
+                            if (p && p.type === 'text' && p.text) return p.text;
+                            return '';
+                        }).join('');
+                        if (t.trim() !== '') return t;
+                    }
+                }
+            }
+
+            if (typeof raw.data === 'string' && raw.data.trim() !== '') return raw.data;
+            if (raw.data != null && typeof raw.data === 'object') {
+                const nested = extractN8nWebhookReply(raw.data, depth + 1);
+                if (nested) return nested;
+            }
+
+            return null;
+        }
+
+        function formatMissingWebhookReply(data) {
+            return 'No assistant text was found in the JSON (checked output, message, text, nested json/body, choices, messages). '
+                + 'In n8n, set "Respond to Webhook" to include a string the UI can read, or rename the field. Raw payload:\n\n'
+                + JSON.stringify(data, null, 2);
+        }
+
         // ── Start conversation: webhook only, no user message in chat ──
         async function triggerStarterOnly(starterText) {
             // #region agent log
@@ -1006,7 +1253,7 @@
                 var _tDomStart = Date.now();
                 // #endregion
                 removeLoadingMessage();
-                const responseText = data.response || data.message || data.output || JSON.stringify(data, null, 2);
+                const responseText = extractN8nWebhookReply(data) || formatMissingWebhookReply(data);
                 addMessage(responseText, false);
                 // #region agent log
                 fetch('http://127.0.0.1:7907/ingest/57e47666-fc1b-41af-8061-71b696c59f5b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'8203d6'},body:JSON.stringify({sessionId:'8203d6',location:'chat_interface.html:triggerStarterOnly',message:'phase_after_addMessage',data:{phase:'after_addMessage',elapsedMs:Date.now()-_t0,domMs:Date.now()-_tDomStart,responseLength:(responseText&&responseText.length)||0},timestamp:Date.now(),hypothesisId:'C'})}).catch(function(){});
@@ -1035,7 +1282,10 @@
 
         // ── Send message ─────────────────────────────────────────
         async function sendMessage(directMessage) {
-            const message = directMessage !== undefined ? directMessage : messageInput.value.trim();
+            // Send button passes the click event as first arg; only treat a real string as typed text.
+            let message = typeof directMessage === 'string' ? directMessage : messageInput.value;
+            if (typeof message !== 'string') message = '';
+            message = message.trim();
             if (!message && attachedFiles.length === 0) return;
 
             // Once a message is sent, the starter CTA is no longer needed.
@@ -1055,17 +1305,23 @@
 
             try {
                 const filesData = await Promise.all(
-                    attachedFiles.map(async (file) => ({
-                        name: file.name,
-                        type: file.type || 'application/octet-stream',
-                        size: file.size,
-                        data: await fileToBase64(file)
-                    }))
+                    attachedFiles.map(async (file) => {
+                        const dataUrl = await fileToBase64(file);
+                        return {
+                            name: file.name,
+                            type: file.type || 'application/octet-stream',
+                            size: file.size,
+                            dataEncoding: 'base64',
+                            data: dataUrlToRawBase64(dataUrl)
+                        };
+                    })
                 );
+
+                const chatInputMerged = await buildChatInputForWebhook(message, attachedFiles);
 
                 const payload = {
                     sessionId: sessionId,
-                    chatInput: message,
+                    chatInput: chatInputMerged,
                     timestamp: new Date().toISOString()
                 };
 
@@ -1082,7 +1338,7 @@
                 const data = await response.json();
                 removeLoadingMessage();
 
-                const responseText = data.response || data.message || data.output || JSON.stringify(data, null, 2);
+                const responseText = extractN8nWebhookReply(data) || formatMissingWebhookReply(data);
                 addMessage(responseText, false);
 
             } catch (error) {

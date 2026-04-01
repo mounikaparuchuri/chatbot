@@ -489,6 +489,7 @@
         }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/legacy/build/pdf.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mammoth@1.9.0/mammoth.browser.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 </head>
 <body>
     <div class="header">
@@ -515,7 +516,7 @@
     <div class="chat-container" id="chatContainer">
         <div class="message assistant" id="welcomeMessage">
             <div class="message-avatar">C</div>
-            <div class="message-content">Welcome to Chapter 3's Energy Tracker Assessment.<br><br>click the start conversation button below.</div>
+            <div class="message-content">Welcome to Chapter 3's Needs and Desires Explorer.<br><br>click the start conversation button below.</div>
         </div>
     </div>
 
@@ -584,13 +585,13 @@
         const themeIcon = document.getElementById('themeIcon');
         const themeText = document.getElementById('themeText');
 
-        const WEBHOOK_URL = 'https://n8n.paruchuri.net/webhook/c174df6e-5834-4eef-a680-ad5aab3536e8/chat';
+        const WEBHOOK_URL = 'https://n8n.paruchuri.net/webhook/7e0eca10-07d1-41e1-9f0c-c8220d4b88ea/chat';
         
         const newChatButton = document.getElementById('newChatButton');
 
         const WELCOME_MESSAGE_HTML = '<div class="message assistant">' +
                     '<div class="message-avatar">C<\/div>' +
-                    '<div class="message-content">Welcome to Chapter 3\'s Talent Interest Explorer.<br><br>Click the start conversation button below.<\/div>' +
+                    '<div class="message-content">Welcome to Chapter 3\'s Needs and Desires Explorer.<br><br>Click the start conversation button below.<\/div>' +
                     '<\/div>';
 
         let attachedFiles = [];
@@ -598,8 +599,8 @@
 
         // URL params for session (iframe: ?user_id=...&course_id=...)
         const urlParams = new URLSearchParams(window.location.search);
-        const userId = urlParams.get('user_id') || '';
-        const courseId = urlParams.get('course_id') || '';
+        const userId = '{{USER_ID}}' || '';
+        const courseId = '{{COURSE_ID}}' || '';
 
         // ── Conversation starter button (only for new chat; with history we show input directly) ─────────────────────────
         function updateConversationStarterUI() {
@@ -654,7 +655,7 @@
             } else {
                 sessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
             }
-            localStorage.setItem('chatSessionId_gpt2', sessionId);
+            localStorage.setItem('chatSessionId_gpt4', sessionId);
             console.log('New Chat – Session ID:', sessionId);
 
             // Clear UI
@@ -667,8 +668,8 @@
             attachedFiles = [];
             filePreviewContainer.innerHTML = '';
 
-            // Clear stored conversation if using local storage (GPT2-specific key)
-            localStorage.removeItem('chatHistory_gpt2');
+            // Clear stored conversation if using local storage (GPT4-specific key)
+            localStorage.removeItem('chatHistory_gpt4');
 
             // Show and highlight the start conversation button (new chat state)
             hasHistory = false;
@@ -706,18 +707,18 @@
             if (e.target === startOverOverlay) closeStartOverModal();
         });
 
-        // ── Session ID (separate from chat_interface.html / n8n GPT2 session) ─
+        // ── Session ID (separate from chat_interface.html / n8n GPT4 session) ─
         // Use stored sessionId unless missing (then compute and store)
-        let sessionId = localStorage.getItem('chatSessionId_gpt2');
+        let sessionId = localStorage.getItem('chatSessionId_gpt4');
         if (!sessionId) {
             if (userId && courseId) {
                 sessionId = `session_${userId}_${courseId}_${Math.random().toString(36).substring(2, 9)}`;
             } else {
                 sessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
             }
-            localStorage.setItem('chatSessionId_gpt2', sessionId);
+            localStorage.setItem('chatSessionId_gpt4', sessionId);
         }
-        console.log('Session ID (GPT2):', sessionId);
+        console.log('Session ID (GPT4):', sessionId);
 
         // ── Load recent conversation history on page load ─────────
         async function loadRecentMessages() {
@@ -898,7 +899,24 @@
             pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/legacy/build/pdf.worker.min.js';
         }
 
-        const MAX_PDF_TEXT_IN_CHAT = 450000;
+        const MAX_EXTRACTED_FILE_TEXT = 450000;
+
+        function isDocxFile(file) {
+            const t = (file.type || '').toLowerCase();
+            const n = (file.name || '').toLowerCase();
+            return (
+                t === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+                || n.endsWith('.docx')
+            );
+        }
+
+        /** Legacy Word .doc (binary) — not supported in-browser; .docx works via Mammoth. */
+        function isLegacyWordDoc(file) {
+            const t = (file.type || '').toLowerCase();
+            const n = (file.name || '').toLowerCase();
+            if (n.endsWith('.docx')) return false;
+            return t === 'application/msword' || n.endsWith('.doc');
+        }
 
         function isPdfFile(file) {
             const t = (file.type || '').toLowerCase();
@@ -921,8 +939,8 @@
                 }
                 let t = full.replace(/\s+\n/g, '\n').trim();
                 if (!t) return null;
-                if (t.length > MAX_PDF_TEXT_IN_CHAT) {
-                    t = t.slice(0, MAX_PDF_TEXT_IN_CHAT) + '\n\n[PDF text truncated for size]';
+                if (t.length > MAX_EXTRACTED_FILE_TEXT) {
+                    t = t.slice(0, MAX_EXTRACTED_FILE_TEXT) + '\n\n[PDF text truncated for size]';
                 }
                 return t;
             } catch (e) {
@@ -931,9 +949,27 @@
             }
         }
 
+        /** Word .docx → plain text for chatInput (same idea as PDF extraction). */
+        async function extractDocxTextForWebhook(file) {
+            if (typeof mammoth === 'undefined') return null;
+            try {
+                const buf = await file.arrayBuffer();
+                const result = await mammoth.extractRawText({ arrayBuffer: buf });
+                let t = (result.value || '').replace(/\r\n/g, '\n').trim();
+                if (!t) return null;
+                if (t.length > MAX_EXTRACTED_FILE_TEXT) {
+                    t = t.slice(0, MAX_EXTRACTED_FILE_TEXT) + '\n\n[Word document text truncated for size]';
+                }
+                return t;
+            } catch (e) {
+                console.warn('DOCX text extract failed:', e);
+                return null;
+            }
+        }
+
         /** Inline into chatInput as UTF-8 text; binary types stay in files[] only. */
         function isTextLikeFile(file) {
-            if (isPdfFile(file)) return false;
+            if (isPdfFile(file) || isDocxFile(file) || isLegacyWordDoc(file)) return false;
             const t = (file.type || '').toLowerCase();
             if (t.startsWith('text/')) return true;
             if (t === 'application/json' || t === 'application/xml' || t.endsWith('+xml')) return true;
@@ -973,6 +1009,15 @@
                     } else {
                         parts.push('\n\n--- PDF: ' + label + ' (no text layer — likely scanned image). Raw bytes are still in JSON `files[]` for server-side OCR. ---');
                     }
+                } else if (isDocxFile(file)) {
+                    const docText = await extractDocxTextForWebhook(file);
+                    if (docText) {
+                        parts.push('\n\n--- Word document (.docx): ' + label + ' (extracted text) ---\n' + docText);
+                    } else {
+                        parts.push('\n\n--- Word (.docx): ' + label + ' (could not extract text). Binary is still in JSON `files[]`. ---');
+                    }
+                } else if (isLegacyWordDoc(file)) {
+                    parts.push('\n\n--- Legacy Word (.doc): ' + label + ' — this page cannot read old .doc files in the browser. Save as .docx or PDF and re-upload. Binary is in `files[]`. ---');
                 } else {
                     parts.push('\n\n[Attached: ' + label + ' — binary is in JSON `files[]` as raw Base64 in `data` (field `dataEncoding` is base64)]');
                 }
@@ -1237,8 +1282,9 @@
 
         // ── Send message ─────────────────────────────────────────
         async function sendMessage(directMessage) {
-            let message = directMessage !== undefined ? directMessage : messageInput.value;
-            if (typeof message !== 'string') message = message == null ? '' : String(message);
+            // Send button passes the click event as first arg; only treat a real string as typed text.
+            let message = typeof directMessage === 'string' ? directMessage : messageInput.value;
+            if (typeof message !== 'string') message = '';
             message = message.trim();
             if (!message && attachedFiles.length === 0) return;
 
