@@ -516,7 +516,7 @@
     <div class="chat-container" id="chatContainer">
         <div class="message assistant" id="welcomeMessage">
             <div class="message-avatar">C</div>
-            <div class="message-content">Welcome to Chapter 3's Energy Tracker Assessment.<br><br>click the start conversation button below.</div>
+            <div class="message-content">Welcome to Chapter 3.<br><br>click the start conversation button below.</div>
         </div>
     </div>
 
@@ -585,13 +585,14 @@
         const themeIcon = document.getElementById('themeIcon');
         const themeText = document.getElementById('themeText');
 
-        const WEBHOOK_URL = 'https://n8n.paruchuri.net/webhook/c174df6e-5834-4eef-a680-ad5aab3536e8/chat';
-        
+        const WEBHOOK_URL = 'https://n8n.paruchuri.net/webhook/8300f995-5e7e-433d-bab4-f28cd90fc097/chat';
+        //const WEBHOOK_URL = 'https://n8n.paruchuri.net/webhook/b7ed37c2-5606-459a-9ee3-e30765525bf7/chat';
+
         const newChatButton = document.getElementById('newChatButton');
 
         const WELCOME_MESSAGE_HTML = '<div class="message assistant">' +
                     '<div class="message-avatar">C<\/div>' +
-                    '<div class="message-content">Welcome to Chapter 3\'s Talent Interest Explorer.<br><br>Click the start conversation button below.<\/div>' +
+                    '<div class="message-content">Welcome to Chapter 3\'s Experimentation Discovery Explorer.<br><br>Click the start conversation button below.<\/div>' +
                     '<\/div>';
 
         let attachedFiles = [];
@@ -655,7 +656,7 @@
             } else {
                 sessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
             }
-            localStorage.setItem('chatSessionId_gpt2', sessionId);
+            localStorage.setItem('chatSessionId_gpt5', sessionId);
             console.log('New Chat – Session ID:', sessionId);
 
             // Clear UI
@@ -668,8 +669,8 @@
             attachedFiles = [];
             filePreviewContainer.innerHTML = '';
 
-            // Clear stored conversation if using local storage (GPT2-specific key)
-            localStorage.removeItem('chatHistory_gpt2');
+            // Clear stored conversation if using local storage (gpt5-specific key)
+            localStorage.removeItem('chatHistory_gpt5');
 
             // Show and highlight the start conversation button (new chat state)
             hasHistory = false;
@@ -707,18 +708,18 @@
             if (e.target === startOverOverlay) closeStartOverModal();
         });
 
-        // ── Session ID (separate from chat_interface.html / n8n GPT2 session) ─
+        // ── Session ID (separate from chat_interface.html / n8n gpt5 session) ─
         // Use stored sessionId unless missing (then compute and store)
-        let sessionId = localStorage.getItem('chatSessionId_gpt2');
+        let sessionId = localStorage.getItem('chatSessionId_gpt5');
         if (!sessionId) {
             if (userId && courseId) {
                 sessionId = `session_${userId}_${courseId}_${Math.random().toString(36).substring(2, 9)}`;
             } else {
                 sessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
             }
-            localStorage.setItem('chatSessionId_gpt2', sessionId);
+            localStorage.setItem('chatSessionId_gpt5', sessionId);
         }
-        console.log('Session ID (GPT2):', sessionId);
+        console.log('Session ID (gpt5):', sessionId);
 
         // ── Load recent conversation history on page load ─────────
         async function loadRecentMessages() {
@@ -1224,7 +1225,6 @@
 
             if (raw.output != null) {
                 const o = raw.output;
-                if (typeof o === 'string' && o.trim() !== '') console.log('output:', o);
                 if (typeof o === 'string' && o.trim() !== '') return o;
                 const nested = extractN8nWebhookReply(o, depth + 1);
                 if (nested) return nested;
@@ -1313,7 +1313,6 @@
                 // #endregion
                 removeLoadingMessage();
                 const responseText = extractN8nWebhookReply(data) || formatMissingWebhookReply(data);
-                //const responseText = typeof data.assistant_text === 'string' ? data.assistant_text : 'No assistant_text field found in webhook response.';
                 addMessage(responseText, false);
                 // #region agent log
                 fetch('http://127.0.0.1:7907/ingest/57e47666-fc1b-41af-8061-71b696c59f5b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'8203d6'},body:JSON.stringify({sessionId:'8203d6',location:'chat_interface.html:triggerStarterOnly',message:'phase_after_addMessage',data:{phase:'after_addMessage',elapsedMs:Date.now()-_t0,domMs:Date.now()-_tDomStart,responseLength:(responseText&&responseText.length)||0},timestamp:Date.now(),hypothesisId:'C'})}).catch(function(){});

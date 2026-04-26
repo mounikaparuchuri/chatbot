@@ -540,7 +540,7 @@
         <div class="file-preview-container" id="filePreviewContainer"></div>
         <div class="input-wrapper" id="inputWrapper">
             <input type="file" id="fileInput" multiple accept="*/*">
-            <button id="copyButton" title="Copy conversation">
+            <button id="copyButton" title="Copy selected text or last reply" aria-label="Copy selected text or last reply">
                 <svg class="copy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20">
                     <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                     <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
@@ -809,30 +809,67 @@
         // ── File attachment ──────────────────────────────────────
         attachButton.addEventListener('click', () => fileInput.click());
 
+        function showCopyFeedback() {
+            var origTitle = copyButton.title;
+            var origAria = copyButton.getAttribute('aria-label') || origTitle;
+            copyButton.title = 'Copied!';
+            copyButton.setAttribute('aria-label', 'Copied!');
+            setTimeout(function() {
+                copyButton.title = origTitle;
+                copyButton.setAttribute('aria-label', origAria);
+            }, 1500);
+        }
+
         copyButton.addEventListener('click', function() {
-            var messages = chatContainer.querySelectorAll('.message');
-            var lines = [];
-            for (var i = 0; i < messages.length; i++) {
-                var msg = messages[i];
+            if (document.activeElement === messageInput && messageInput) {
+                var a = messageInput.selectionStart;
+                var b = messageInput.selectionEnd;
+                if (typeof a === 'number' && typeof b === 'number' && a !== b) {
+                    var lo = Math.min(a, b);
+                    var hi = Math.max(a, b);
+                    var draft = messageInput.value.slice(lo, hi);
+                    if (draft.trim() && navigator.clipboard && navigator.clipboard.writeText) {
+                        navigator.clipboard.writeText(draft).then(showCopyFeedback).catch(function() {});
+                        return;
+                    }
+                }
+            }
+
+            var sel = window.getSelection && window.getSelection();
+            if (sel && sel.rangeCount > 0 && sel.toString().trim()) {
+                var range = sel.getRangeAt(0);
+                if (chatContainer.contains(range.commonAncestorContainer)) {
+                    var selected = sel.toString();
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                        navigator.clipboard.writeText(selected).then(showCopyFeedback).catch(function() {});
+                    }
+                    return;
+                }
+            }
+
+            var assistants = chatContainer.querySelectorAll('.message.assistant');
+            var lastReply = '';
+            for (var i = assistants.length - 1; i >= 0; i--) {
+                var msg = assistants[i];
                 if (msg.id === 'loadingMessage') continue;
                 var contentEl = msg.querySelector('.message-content');
                 if (!contentEl) continue;
-                var role = msg.classList.contains('user') ? 'User' : 'Assistant';
                 var text = contentEl.innerText || contentEl.textContent || '';
-                if (text.trim()) lines.push(role + ':\n' + text.trim());
+                text = text.trim();
+                if (text) {
+                    lastReply = text;
+                    break;
+                }
             }
-            var transcript = lines.join('\n\n');
-            if (!transcript) {
-                if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText('').catch(function(){});
+
+            if (!lastReply) {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText('').catch(function() {});
+                }
                 return;
             }
             if (navigator.clipboard && navigator.clipboard.writeText) {
-                navigator.clipboard.writeText(transcript).then(function() {
-                    var orig = copyButton.title;
-                    copyButton.title = 'Copied!';
-                    copyButton.setAttribute('aria-label', 'Copied!');
-                    setTimeout(function() { copyButton.title = orig; copyButton.setAttribute('aria-label', orig); }, 1500);
-                }).catch(function() {});
+                navigator.clipboard.writeText(lastReply).then(showCopyFeedback).catch(function() {});
             }
         });
 
@@ -1038,10 +1075,31 @@
         messageInput.addEventListener('paste', function (e) {
             const cd = e.clipboardData;
             if (!cd || !cd.files || cd.files.length === 0) return;
-            e.preventDefault();
-            for (let i = 0; i < cd.files.length; i++) {
-                attachedFiles.push(cd.files[i]);
+
+            const files = Array.from(cd.files);
+            const hasDocLike = files.some(function (f) {
+                return isPdfFile(f) || isDocxFile(f) || isLegacyWordDoc(f);
+            });
+            if (hasDocLike) {
+                e.preventDefault();
+                files.forEach(function (f) { attachedFiles.push(f); });
+                updateFilePreview();
+                return;
             }
+
+            const onlyImages = files.every(function (f) {
+                return (f.type || '').toLowerCase().startsWith('image/');
+            });
+            const plain = (cd.getData('text/plain') || '').trim();
+            const html = (cd.getData('text/html') || '').trim();
+            // Word and similar put a rendered bitmap on the clipboard next to real HTML/text.
+            // Do not swallow the paste as image-only; let the textarea receive the text.
+            if (onlyImages && (plain.length > 0 || html.length > 0)) {
+                return;
+            }
+
+            e.preventDefault();
+            files.forEach(function (f) { attachedFiles.push(f); });
             updateFilePreview();
         });
 
