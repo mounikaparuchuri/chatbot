@@ -487,69 +487,6 @@
             background: #0d5c57;
             border-color: #0d5c57;
         }
-
-        /* Save action bar — shown when agent returns Top Talent Themes */
-        #save-bar {
-            display: none;
-            max-width: 1120px;
-            margin: 16px auto 0;
-            padding: 16px;
-            background: #f0fdf4;
-            border: 1px solid #86efac;
-            border-radius: 8px;
-            text-align: center;
-        }
-
-        body.dark-mode #save-bar {
-            background: #14532d;
-            border-color: #166534;
-        }
-
-        #save-bar p {
-            margin: 0 0 12px;
-            color: #166534;
-            font-weight: 500;
-            line-height: 1.5;
-        }
-
-        body.dark-mode #save-bar p {
-            color: #bbf7d0;
-        }
-
-        #save-btn {
-            padding: 12px 28px;
-            background: #16a34a;
-            color: #fff;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 15px;
-            font-weight: 500;
-            transition: background-color 0.2s;
-        }
-
-        #save-btn:hover:not(:disabled) {
-            background: #15803d;
-        }
-
-        #save-btn:disabled {
-            background: #86efac;
-            cursor: not-allowed;
-        }
-
-        body.dark-mode #save-btn:disabled {
-            background: #166534;
-        }
-
-        #save-status {
-            margin-top: 10px;
-            font-size: 13px;
-            color: #166534;
-        }
-
-        body.dark-mode #save-status {
-            color: #bbf7d0;
-        }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/legacy/build/pdf.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script src="https://cdn.jsdelivr.net/npm/mammoth@1.9.0/mammoth.browser.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
@@ -621,11 +558,6 @@
             ></textarea>
             <button id="sendButton">Send</button>
         </div>
-        <div id="save-bar" aria-live="polite">
-            <p id="save-bar-msg">Ready to save your document.</p>
-            <button type="button" id="save-btn">Save Document</button>
-            <div id="save-status"></div>
-        </div>
     </div>
 
     <div id="startOverOverlay" class="start-over-overlay" aria-hidden="true">
@@ -657,10 +589,6 @@
         const N8N_SAVE_WEBHOOK = 'https://n8n.paruchuri.net/webhook/3a2ede5a-1d84-45ff-8610-ea8a914f2fbe';
 
         const newChatButton = document.getElementById('newChatButton');
-        const saveBar = document.getElementById('save-bar');
-        const saveBarMsg = document.getElementById('save-bar-msg');
-        const saveBtn = document.getElementById('save-btn');
-        const saveStatus = document.getElementById('save-status');
 
         let pendingDocument = null;
         let chatLockedForFinalStep = false;
@@ -1472,31 +1400,8 @@
 
             return {
                 displayMessage: text,
-                document: documentFromTalentThemesBlock(block, text),
-                summaryMessage: 'Your final document has been saved to the database for retrieval later'
+                document: documentFromTalentThemesBlock(block, text)
             };
-        }
-
-        function showSaveBar(summaryMessage) {
-            if (!saveBar) return;
-            setConversationStarterVisible(false);
-            if (saveBarMsg) {
-                saveBarMsg.textContent = summaryMessage || 'Your session is complete. Save your document?';
-            }
-            saveBar.style.display = 'block';
-            saveBar.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-            if (saveStatus) {
-                saveStatus.textContent = '';
-                saveStatus.style.color = '';
-            }
-            if (saveBtn) {
-                saveBtn.disabled = false;
-                saveBtn.textContent = 'Save Document';
-            }
-        }
-
-        function hideSaveBar() {
-            if (saveBar) saveBar.style.display = 'none';
         }
 
         function lockChatInput() {
@@ -1517,7 +1422,6 @@
 
         function resetFinalStepState() {
             pendingDocument = null;
-            hideSaveBar();
             unlockChatInput();
         }
 
@@ -1528,7 +1432,6 @@
             if (completion) {
                 addMessage(completion.displayMessage, false);
                 pendingDocument = completion.document;
-                showSaveBar(completion.summaryMessage);
                 lockChatInput();
                 saveDocument();
                 return true;
@@ -1541,16 +1444,8 @@
         async function saveDocument() {
             if (!pendingDocument) return;
 
-            const btn = saveBtn;
-            const status = saveStatus;
-            if (!btn) return;
-
-            btn.disabled = true;
-            btn.textContent = 'Saving…';
-            if (status) {
-                status.textContent = '';
-                status.style.color = '';
-            }
+            const documentPayload = pendingDocument;
+            pendingDocument = null;
 
             try {
                 const res = await fetch(N8N_SAVE_WEBHOOK, {
@@ -1560,35 +1455,16 @@
                         user_id: userId,
                         course_id: courseId,
                         document_type_id: DOCUMENT_TYPE_ID,
-                        document: pendingDocument
+                        document: documentPayload
                     })
                 });
 
                 if (!res.ok) throw new Error('HTTP error! status: ' + res.status);
-
-                const result = await res.json().catch(function () { return {}; });
-                const recordId = result.record?.id ?? result.id ?? result.document_id;
-
-                btn.textContent = 'Saved ✓';
-                if (status) {
-                    status.textContent = recordId
-                        ? 'Saved successfully (ID: ' + recordId + ')'
-                        : 'Saved successfully.';
-                    status.style.color = '#16a34a';
-                }
-                pendingDocument = null;
+                await res.json().catch(function () { return {}; });
             } catch (err) {
                 console.error('Save error:', err);
-                btn.disabled = false;
-                btn.textContent = 'Save Document';
-                if (status) {
-                    status.textContent = 'Save failed — please try again.';
-                    status.style.color = '#dc2626';
-                }
             }
         }
-
-        if (saveBtn) saveBtn.addEventListener('click', saveDocument);
 
         // ── Start conversation: webhook only, no user message in chat ──
         async function triggerStarterOnly(starterText) {
