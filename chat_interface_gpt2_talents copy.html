@@ -497,32 +497,162 @@
         var DEFAULT_SAVE_WEBHOOK = 'https://n8n.paruchuri.net/webhook/3a2ede5a-1d84-45ff-8610-ea8a914f2fbe';
         var DEFAULT_FETCH_WEBHOOK = 'https://n8n.paruchuri.net/webhook/45f3c8a9-030f-4311-b45d-c6fc605bc0c0';
 
-        function extractDocumentFromFetchResponse(raw) {
+        function tryParseJsonString(str) {
+            if (typeof str !== 'string') return null;
+            var trimmed = str.trim();
+            if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) return null;
+            try { return JSON.parse(trimmed); } catch (_) { return null; }
+        }
+
+        function isMetaDocumentKey(key) {
+            return /^(summary_message|raw_section|raw_talent_themes_section|user_id|course_id|document_type_id|session_id|id|record_id|created_at|updated_at|status|record|metadata|source|received_at)$/i.test(String(key));
+        }
+
+        function extractPayloadContent(doc) {
+            if (doc == null) return null;
+            if (typeof doc === 'string') {
+                var parsed = tryParseJsonString(doc);
+                return parsed != null ? extractPayloadContent(parsed) : doc;
+            }
+            if (typeof doc !== 'object') return doc;
+            if (Array.isArray(doc)) {
+                return doc.length === 1 ? extractPayloadContent(doc[0]) : doc;
+            }
+
+            if (Object.prototype.hasOwnProperty.call(doc, 'payload') && doc.payload != null) {
+                return extractPayloadContent(doc.payload);
+            }
+
+            var paths = ['record', 'document', 'data'];
+            for (var i = 0; i < paths.length; i++) {
+                var node = doc[paths[i]];
+                if (node == null) continue;
+                if (Array.isArray(node) && node.length) node = node[0];
+                if (typeof node !== 'object') continue;
+                var extracted = extractPayloadContent(node);
+                if (extracted != null && extracted !== doc) return extracted;
+            }
+
+            return doc;
+        }
+
+        function findPayloadInFetchResponse(raw) {
             if (raw == null) return null;
             if (typeof raw === 'string') {
                 var trimmed = raw.trim();
-                return trimmed ? trimmed : null;
+                if (!trimmed) return null;
+                var parsed = tryParseJsonString(trimmed);
+                return parsed != null ? findPayloadInFetchResponse(parsed) : null;
             }
             if (typeof raw !== 'object') return null;
-            if (raw.document != null) return raw.document;
-            if (raw.record && raw.record.document != null) return raw.record.document;
-            if (Array.isArray(raw.records) && raw.records[0] && raw.records[0].document != null) {
-                return raw.records[0].document;
+            if (Array.isArray(raw)) {
+                return raw.length ? findPayloadInFetchResponse(raw[0]) : null;
             }
-            if (raw.data != null) {
-                if (typeof raw.data === 'object' && !Array.isArray(raw.data)) {
-                    return extractDocumentFromFetchResponse(raw.data);
-                }
+
+            if (Object.prototype.hasOwnProperty.call(raw, 'payload') && raw.payload != null && raw.payload !== '') {
+                return extractPayloadContent(raw.payload);
             }
-            if (Object.keys(raw).length) return raw;
+
+            var paths = ['record', 'document', 'data'];
+            for (var i = 0; i < paths.length; i++) {
+                var node = raw[paths[i]];
+                if (node == null) continue;
+                if (Array.isArray(node) && node.length) node = node[0];
+                if (typeof node !== 'object') continue;
+                var extracted = findPayloadInFetchResponse(node);
+                if (extracted != null) return extracted;
+            }
+
             return null;
+        }
+
+        function extractDocumentFromFetchResponse(raw) {
+            return findPayloadInFetchResponse(raw);
         }
 
         function formatDocumentForChatInput(doc, label) {
             if (doc == null) return '';
             label = label || 'Loaded document';
-            if (typeof doc === 'string') return '\n\n--- ' + label + ' ---\n' + doc;
-            return '\n\n--- ' + label + ' ---\n' + JSON.stringify(doc, null, 2);
+            var readable = formatDocumentSummary(doc, label);
+            return readable ? '\n\n' + readable : '';
+        }
+
+        function humanizeDocumentKey(key) {
+            return String(key).replace(/_/g, ' ').replace(/\b\w/g, function (c) { return c.toUpperCase(); });
+        }
+
+        function formatDocumentValue(val, depth) {
+            depth = depth || 0;
+            if (val == null || val === '') return '';
+
+            if (typeof val === 'string') {
+                var parsed = tryParseJsonString(val);
+                if (parsed != null) return formatDocumentValue(parsed, depth);
+                return val.trim();
+            }
+
+            if (typeof val === 'number' || typeof val === 'boolean') {
+                return String(val);
+            }
+
+            if (Array.isArray(val)) {
+                var items = [];
+                for (var i = 0; i < val.length; i++) {
+                    var item = val[i];
+                    if (item == null || item === '') continue;
+                    if (typeof item === 'object') {
+                        var nested = formatDocumentValue(item, depth + 1);
+                        if (nested) items.push('- ' + nested.replace(/\n/g, '\n  '));
+                    } else {
+                        items.push('- ' + String(item).trim());
+                    }
+                }
+                return items.join('\n');
+            }
+
+            if (typeof val === 'object') {
+                var lines = [];
+                var keys = Object.keys(val);
+                for (var j = 0; j < keys.length; j++) {
+                    var k = keys[j];
+                    if (isMetaDocumentKey(k)) continue;
+                    var v = val[k];
+                    if (v == null || v === '') continue;
+                    var heading = humanizeDocumentKey(k);
+                    if (typeof v === 'object') {
+                        var nestedBlock = formatDocumentValue(v, depth + 1);
+                        if (!nestedBlock) continue;
+                        lines.push('**' + heading + '**');
+                        lines.push(nestedBlock);
+                        lines.push('');
+                    } else {
+                        lines.push('**' + heading + ':** ' + String(v).trim());
+                    }
+                }
+                return lines.join('\n').trim();
+            }
+
+            return String(val);
+        }
+
+        function formatDocumentSummary(doc, label) {
+            if (doc == null) return '';
+            label = label || 'Retrieved summary';
+
+            if (typeof doc === 'string') {
+                var parsedDoc = tryParseJsonString(doc);
+                doc = parsedDoc != null ? parsedDoc : doc;
+            }
+
+            doc = extractPayloadContent(doc);
+            if (doc == null) return '';
+
+            if (typeof doc === 'string') {
+                return doc.trim();
+            }
+
+            var body = formatDocumentValue(doc, 0);
+            return body ? body.trim() : '';
         }
 
         function gatherWebhookStrings(raw, depth, out) {
@@ -637,9 +767,16 @@
             var cachedSourceDocument = null;
             var sourceDocumentFetched = false;
             var sourceDocumentInjected = false;
+            var sourceDocumentSummaryShown = false;
 
             if (!trigger || typeof trigger.detect !== 'function') {
                 throw new Error('ChatDocumentSave.create requires config.trigger with detect()');
+            }
+
+            function hasSourceDocumentContent(doc) {
+                if (doc == null) return false;
+                var summary = formatDocumentSummary(doc, sourceDocumentLabel);
+                return !!(summary && summary.trim());
             }
 
             async function fetchSourceDocument() {
@@ -659,6 +796,9 @@
                     if (!res.ok) throw new Error('HTTP error! status: ' + res.status);
                     var data = await res.json().catch(function () { return null; });
                     cachedSourceDocument = extractDocumentFromFetchResponse(data);
+                    if (!hasSourceDocumentContent(cachedSourceDocument)) {
+                        cachedSourceDocument = null;
+                    }
                 } catch (err) {
                     console.error('Fetch source document error:', err);
                     cachedSourceDocument = null;
@@ -689,6 +829,7 @@
                 cachedSourceDocument = null;
                 sourceDocumentFetched = false;
                 sourceDocumentInjected = false;
+                sourceDocumentSummaryShown = false;
             }
 
             async function saveDocument(documentPayload) {
@@ -737,6 +878,10 @@
                     return trigger.detect(responseText, rawData);
                 },
                 fetchSourceDocument: fetchSourceDocument,
+                getSourceDocument: function () { return cachedSourceDocument; },
+                hasSourceDocumentContent: function () { return hasSourceDocumentContent(cachedSourceDocument); },
+                hasShownSourceSummary: function () { return sourceDocumentSummaryShown; },
+                markSourceSummaryShown: function () { sourceDocumentSummaryShown = true; },
                 prepareAgentPayload: prepareAgentPayload,
                 resetSourceDocumentCache: resetSourceDocumentCache,
                 saveDocument: saveDocument,
@@ -776,6 +921,8 @@
             resolveSourceDocumentTypeId: resolveSourceDocumentTypeId,
             resolveUserContext: resolveUserContext,
             formatDocumentForChatInput: formatDocumentForChatInput,
+            formatDocumentSummary: formatDocumentSummary,
+            extractPayloadContent: extractPayloadContent,
             triggers: {
                 topTalentThemes: function () {
                     return createSectionPhraseTrigger({
@@ -909,6 +1056,7 @@
             fetchOnStartConversation: true,
             fetchOnSendMessage: false,
             saveOnAgentResponse: true,
+            showRetrievedDocumentOnScreen: true,
             saveTrigger: ChatDocumentSave.triggers.topTalentThemes()
         };
 
@@ -932,6 +1080,20 @@
                 payload.chatInput = chatInput;
             }
             return payload;
+        }
+
+        function showRetrievedDocumentSummary() {
+            if (!DOCUMENT_WEBHOOK_CONFIG.showRetrievedDocumentOnScreen) return;
+            if (documentSave.hasShownSourceSummary()) return;
+            const doc = documentSave.getSourceDocument();
+            if (!doc) return;
+            const summary = ChatDocumentSave.formatDocumentSummary(
+                doc,
+                DOCUMENT_WEBHOOK_CONFIG.sourceDocumentLabel
+            );
+            if (!summary) return;
+            documentSave.markSourceSummaryShown();
+            addMessage('Here is your retrieved summary from the previous work.\n\n' + summary, false);
         }
 
         // ── Conversation starter button (only for new chat; with history we show input directly) ─────────────────────────
@@ -1461,7 +1623,9 @@
         function formatMessage(text) {
             if (text == null) return '';
             if (typeof text !== 'string') {
-                text = (typeof text === 'object' ? JSON.stringify(text, null, 2) : String(text));
+                text = (typeof ChatDocumentSave !== 'undefined' && ChatDocumentSave.formatDocumentSummary)
+                    ? ChatDocumentSave.formatDocumentSummary(text, 'Summary')
+                    : String(text);
             }
             text = text.replace(/&/g, '&amp;')
                        .replace(/</g, '&lt;')
@@ -1476,9 +1640,20 @@
             text = text.replace(/\*([^*]+)\*/g, '<em>$1<\/em>');
             text = text.replace(/_([^_]+)_/g, '<em>$1<\/em>');
             text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1<\/a>');
-            text = text.replace(/^[\-\*]\s+(.+)$/gm, '<li>$1<\/li>');
-            text = text.replace(/(<li>.*<\/li>)/s, '<ul>$1<\/ul>');
-            text = text.replace(/^\d+\.\s+(.+)$/gm, '<li>$1<\/li>');
+            text = text.replace(/(?:^|\n)((?:[\-\*]\s+.+(?:\n|$))+)/g, function (match, block) {
+                var items = block.trim().split('\n').map(function (line) {
+                    var m = line.match(/^[\-\*]\s+(.+)$/);
+                    return m ? '<li>' + m[1] + '</li>' : line;
+                }).join('');
+                return '\n<ul>' + items + '</ul>\n';
+            });
+            text = text.replace(/(?:^|\n)((?:\d+\.\s+.+(?:\n|$))+)/g, function (match, block) {
+                var items = block.trim().split('\n').map(function (line) {
+                    var m = line.match(/^\d+\.\s+(.+)$/);
+                    return m ? '<li>' + m[1] + '</li>' : line;
+                }).join('');
+                return '\n<ol>' + items + '</ol>\n';
+            });
             text = text.replace(/\n/g, '<br>');
 
             return text;
@@ -1646,6 +1821,15 @@
                     timestamp: new Date().toISOString()
                 };
                 await applyFetchHooks(payload, starterText, 'start');
+                removeLoadingMessage();
+                if (documentSave.hasSourceDocumentContent()) {
+                    showRetrievedDocumentSummary();
+                } else {
+                    payload.chatInput = starterText;
+                    delete payload.sourceDocument;
+                    delete payload.sourceDocumentTypeId;
+                }
+                addLoadingMessage();
 
                 const response = await fetch(WEBHOOK_URL, {
                     method: 'POST',
