@@ -269,16 +269,17 @@
     function resolveDocumentTypeId(pageDefault) {
         var urlParams = new URLSearchParams(global.location && global.location.search || '');
         return urlParams.get('document_type_id')
-            || (global.PLATFORM_DOC_TYPE)
             || pageDefault
+            || (global.PLATFORM_DOC_TYPE)
             || 'chat_summary';
     }
 
     function resolveSourceDocumentTypeId(pageDefault) {
         var urlParams = new URLSearchParams(global.location && global.location.search || '');
         return urlParams.get('source_document_type_id')
-            || (global.PLATFORM_SOURCE_DOC_TYPE)
+            || urlParams.get('fetch_document_type_id')
             || pageDefault
+            || (global.PLATFORM_SOURCE_DOC_TYPE)
             || null;
     }
 

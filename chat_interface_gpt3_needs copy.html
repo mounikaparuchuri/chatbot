@@ -508,11 +508,30 @@
             return /^(summary_message|raw_section|raw_talent_themes_section|user_id|course_id|document_type_id|session_id|id|record_id|created_at|updated_at|status|record|metadata|source|received_at)$/i.test(String(key));
         }
 
+        function isTrivialEmptyContent(val) {
+            if (val == null) return true;
+            if (typeof val === 'string') {
+                var t = val.trim();
+                return !t || /^null$/i.test(t) || /^undefined$/i.test(t);
+            }
+            if (Array.isArray(val)) return val.length === 0;
+            if (typeof val === 'object') return Object.keys(val).length === 0;
+            return false;
+        }
+
+        function hasDisplayableDocumentContent(doc) {
+            if (doc == null) return false;
+            var summary = formatDocumentSummary(doc, '');
+            return !!(summary && summary.trim() && !isTrivialEmptyContent(summary));
+        }
+
         function extractPayloadContent(doc) {
             if (doc == null) return null;
             if (typeof doc === 'string') {
                 var parsed = tryParseJsonString(doc);
-                return parsed != null ? extractPayloadContent(parsed) : doc;
+                if (parsed != null) return extractPayloadContent(parsed);
+                if (isTrivialEmptyContent(doc)) return null;
+                return doc;
             }
             if (typeof doc !== 'object') return doc;
             if (Array.isArray(doc)) {
@@ -550,7 +569,8 @@
             }
 
             if (Object.prototype.hasOwnProperty.call(raw, 'payload') && raw.payload != null && raw.payload !== '') {
-                return extractPayloadContent(raw.payload);
+                var payloadContent = extractPayloadContent(raw.payload);
+                if (hasDisplayableDocumentContent(payloadContent)) return payloadContent;
             }
 
             var paths = ['record', 'document', 'data'];
@@ -560,7 +580,7 @@
                 if (Array.isArray(node) && node.length) node = node[0];
                 if (typeof node !== 'object') continue;
                 var extracted = findPayloadInFetchResponse(node);
-                if (extracted != null) return extracted;
+                if (hasDisplayableDocumentContent(extracted)) return extracted;
             }
 
             return null;
@@ -645,10 +665,11 @@
             }
 
             doc = extractPayloadContent(doc);
-            if (doc == null) return '';
+            if (doc == null || isTrivialEmptyContent(doc)) return '';
 
             if (typeof doc === 'string') {
-                return doc.trim();
+                var trimmedDoc = doc.trim();
+                return isTrivialEmptyContent(trimmedDoc) ? '' : trimmedDoc;
             }
 
             var body = formatDocumentValue(doc, 0);
@@ -774,9 +795,7 @@
             }
 
             function hasSourceDocumentContent(doc) {
-                if (doc == null) return false;
-                var summary = formatDocumentSummary(doc, sourceDocumentLabel);
-                return !!(summary && summary.trim());
+                return hasDisplayableDocumentContent(doc);
             }
 
             async function fetchSourceDocument() {
@@ -892,16 +911,17 @@
         function resolveDocumentTypeId(pageDefault) {
             var urlParams = new URLSearchParams(global.location && global.location.search || '');
             return urlParams.get('document_type_id')
-                || (global.PLATFORM_DOC_TYPE)
                 || pageDefault
+                || (global.PLATFORM_DOC_TYPE)
                 || 'chat_summary';
         }
 
         function resolveSourceDocumentTypeId(pageDefault) {
             var urlParams = new URLSearchParams(global.location && global.location.search || '');
             return urlParams.get('source_document_type_id')
-                || (global.PLATFORM_SOURCE_DOC_TYPE)
+                || urlParams.get('fetch_document_type_id')
                 || pageDefault
+                || (global.PLATFORM_SOURCE_DOC_TYPE)
                 || null;
         }
 
@@ -923,6 +943,8 @@
             formatDocumentForChatInput: formatDocumentForChatInput,
             formatDocumentSummary: formatDocumentSummary,
             extractPayloadContent: extractPayloadContent,
+            isTrivialEmptyContent: isTrivialEmptyContent,
+            hasDisplayableDocumentContent: hasDisplayableDocumentContent,
             triggers: {
                 topTalentThemes: function () {
                     return createSectionPhraseTrigger({
@@ -1054,11 +1076,16 @@
         const courseId = urlParams.get('course_id') || window.PLATFORM_COURSE_ID || '{{COURSE_ID}}' || '';
 
         // ── Document fetch/save hooks — edit when each n8n webhook runs ──
+        // SAVE: documentTypeId — this page's output type
+        // FETCH: sourceDocumentTypeId — prior page's output to look up (unique per HTML file)
+        const PAGE_SAVE_DOCUMENT_TYPE_ID = 'needs_desires';
+        const PAGE_FETCH_DOCUMENT_TYPE_ID = 'talent_interest_explorer';
+
         const DOCUMENT_WEBHOOK_CONFIG = {
             saveWebhookUrl: ChatDocumentSave.DEFAULT_SAVE_WEBHOOK,
             fetchWebhookUrl: ChatDocumentSave.DEFAULT_FETCH_WEBHOOK,
-            documentTypeId: ChatDocumentSave.resolveDocumentTypeId('needs_desires'),
-            sourceDocumentTypeId: ChatDocumentSave.resolveSourceDocumentTypeId('talent_interest_explorer'),
+            documentTypeId: ChatDocumentSave.resolveDocumentTypeId(PAGE_SAVE_DOCUMENT_TYPE_ID),
+            sourceDocumentTypeId: ChatDocumentSave.resolveSourceDocumentTypeId(PAGE_FETCH_DOCUMENT_TYPE_ID),
             sourceDocumentLabel: 'Talent Interest Explorer Results',
             fetchOnStartConversation: true,
             fetchOnSendMessage: false,
@@ -1092,10 +1119,12 @@
         function showRetrievedDocumentSummary() {
             if (!DOCUMENT_WEBHOOK_CONFIG.showRetrievedDocumentOnScreen) return;
             if (documentSave.hasShownSourceSummary()) return;
-            const doc = documentSave.getSourceDocument();
-            if (!doc) return;
-            const summary = ChatDocumentSave.formatDocumentSummary(doc, DOCUMENT_WEBHOOK_CONFIG.sourceDocumentLabel);
-            if (!summary) return;
+            if (!documentSave.hasSourceDocumentContent()) return;
+            const summary = ChatDocumentSave.formatDocumentSummary(
+                documentSave.getSourceDocument(),
+                DOCUMENT_WEBHOOK_CONFIG.sourceDocumentLabel
+            );
+            if (!summary || ChatDocumentSave.isTrivialEmptyContent(summary)) return;
             documentSave.markSourceSummaryShown();
             addMessage('Here is your retrieved summary from the previous work.\n\n' + summary, false);
         }
