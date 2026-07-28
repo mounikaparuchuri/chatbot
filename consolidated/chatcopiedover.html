@@ -516,7 +516,7 @@
     <div class="chat-container" id="chatContainer">
         <div class="message assistant" id="welcomeMessage">
             <div class="message-avatar">C</div>
-            <div class="message-content">Welcome to Chapter 3's Possible Paths Explorer.<br><br>click the start conversation button below.</div>
+            <div class="message-content">Welcome to Chapter 3's Needs and Desires Explorer.<br><br>click the start conversation button below.</div>
         </div>
     </div>
 
@@ -585,13 +585,13 @@
         const themeIcon = document.getElementById('themeIcon');
         const themeText = document.getElementById('themeText');
 
-        const WEBHOOK_URL = 'https://n8n.paruchuri.net/webhook/7e0eca10-07d1-41e1-9f0c-c8220d4b88ea/chat';
+        const WEBHOOK_URL = 'https://n8n.paruchuri.net/webhook/0f663599-9fca-4a14-bd5e-99478560a0e6/chat';
         
         const newChatButton = document.getElementById('newChatButton');
 
         const WELCOME_MESSAGE_HTML = '<div class="message assistant">' +
                     '<div class="message-avatar">C<\/div>' +
-                    '<div class="message-content">Welcome to Chapter 3\'s Possible Paths Explorer.<br><br>Click the start conversation button below.<\/div>' +
+                    '<div class="message-content">Welcome to Chapter 3\'s Needs and Desires Explorer.<br><br>Click the start conversation button below.<\/div>' +
                     '<\/div>';
 
         let attachedFiles = [];
@@ -655,7 +655,7 @@
             } else {
                 sessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
             }
-            localStorage.setItem('chatSessionId_gpt4', sessionId);
+            localStorage.setItem('chatSessionId_gpt4_'+ courseId, sessionId);
             console.log('New Chat – Session ID:', sessionId);
 
             // Clear UI
@@ -709,14 +709,14 @@
 
         // ── Session ID (separate from chat_interface.html / n8n GPT4 session) ─
         // Use stored sessionId unless missing (then compute and store)
-        let sessionId = localStorage.getItem('chatSessionId_gpt4');
+        let sessionId = localStorage.getItem('chatSessionId_gpt4_'+ courseId);
         if (!sessionId) {
             if (userId && courseId) {
                 sessionId = `session_${userId}_${courseId}_${Math.random().toString(36).substring(2, 9)}`;
             } else {
                 sessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
             }
-            localStorage.setItem('chatSessionId_gpt4', sessionId);
+            localStorage.setItem('chatSessionId_gpt4_'+ courseId, sessionId);  
         }
         console.log('Session ID (GPT4):', sessionId);
 
