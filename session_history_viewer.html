@@ -265,47 +265,6 @@
             flex-shrink: 0;
         }
 
-        /* ── Missing-IDs banner (manual override for local testing) ── */
-        .missing-ids-banner {
-            margin-top: 22px;
-            padding: 16px 18px;
-            border: 1px dashed var(--border-color);
-            border-radius: 10px;
-            font-size: 13px;
-            color: var(--text-secondary);
-        }
-
-        .manual-form {
-            display: flex;
-            gap: 8px;
-            margin-top: 10px;
-            flex-wrap: wrap;
-        }
-
-        .manual-form input {
-            padding: 8px 10px;
-            border: 1px solid var(--input-border);
-            border-radius: 6px;
-            background-color: var(--bg-primary);
-            color: var(--text-primary);
-            font-size: 13px;
-            min-width: 160px;
-        }
-
-        .manual-form button {
-            background-color: #0A403D;
-            color: white;
-            border: none;
-            border-radius: 6px;
-            padding: 8px 16px;
-            cursor: pointer;
-            font-size: 13px;
-        }
-
-        .manual-form button:hover {
-            background-color: #0d5c57;
-        }
-
         /* ── Session list ───────────────────────────────────────── */
         .session-card {
             background-color: var(--bg-secondary);
@@ -514,16 +473,6 @@
                     <p class="view-sub">Pick the conversation module you want to review, then pick a session.</p>
                 </div>
                 <div class="module-grid" id="moduleGrid"></div>
-                <div class="missing-ids-banner" id="missingIdsBanner" style="display:none">
-                    This page needs a learner and course to look up sessions. Normally these arrive
-                    automatically from LearnWorlds, or via <code>?user_id=...&amp;course_id=...</code> in the URL.
-                    For local testing, enter them here:
-                    <div class="manual-form">
-                        <input type="text" id="manualUserId" placeholder="user_id">
-                        <input type="text" id="manualCourseId" placeholder="course_id">
-                        <button id="manualIdsSubmit" type="button">Use these IDs</button>
-                    </div>
-                </div>
             </section>
 
             <section class="view" id="transcriptView">
@@ -562,12 +511,8 @@
         
         // ── Learner / course resolution ──────────────────────────────
         const urlParams = new URLSearchParams(window.location.search);
-        let userId = urlParams.get('user_id') || window.PLATFORM_USER_ID || '{{USER_ID}}' || '';
-        let courseId = urlParams.get('course_id') || window.PLATFORM_COURSE_ID || '{{COURSE_ID}}' || '';
-        // Guard against the raw LearnWorlds placeholder when this file is opened
-        // directly (outside LearnWorlds, no server-side templating happened).
-        if (userId === '{{USER_ID}}') userId = '';
-        if (courseId === '{{COURSE_ID}}') courseId = '';
+        let userId =  '{{USER_ID}}' || urlParams.get('user_id') || '';
+        let courseId = '{{COURSE_ID}}' || urlParams.get('course_id') || '';
 
         // ── State ──────────────────────────────────────────────────
         const state = { view: 'modules', module: null };
@@ -755,19 +700,7 @@
                 card.addEventListener('click', () => goToSessions(m));
                 grid.appendChild(card);
             });
-
-            // const banner = document.getElementById('missingIdsBanner');
-            // banner.style.display = (userId && courseId) ? 'none' : '';
         }
-
-        document.getElementById('manualIdsSubmit').addEventListener('click', () => {
-            const u = document.getElementById('manualUserId').value.trim();
-            const c = document.getElementById('manualCourseId').value.trim();
-            if (u) userId = u;
-            if (c) courseId = c;
-            //updateIdChip();
-            renderModules();
-        });
 
         function updateIdChip() {
             const chip = document.getElementById('idChip');
