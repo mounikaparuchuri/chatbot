@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Claude Chat Interface</title>
     <style>
-        * {
+        * {f
             margin: 0;
             padding: 0;
             box-sizing: border-box;
@@ -781,7 +781,7 @@
             var fetchWebhookUrl = config.fetchWebhookUrl || config.saveWebhookUrl || DEFAULT_FETCH_WEBHOOK;
             var documentTypeId = config.documentTypeId || 'chat_summary';
             var sourceDocumentTypeId = config.sourceDocumentTypeId || null;
-            var sourceDocumentLabel = config.sourceDocumentLabel || 'Energy Tracker Results';
+            var sourceDocumentLabel = config.sourceDocumentLabel || 'Loaded document';
             var userId = config.userId || '';
             var courseId = config.courseId || '';
             var trigger = config.trigger;
@@ -952,6 +952,12 @@
                         listKey: 'top_talent_themes'
                     });
                 },
+                needsAndDesires: function () {
+                    return createSectionPhraseTrigger({
+                        phrase: /(?:your\s+)?needs\s+(?:and\s+desires)?\s*summary/i,
+                        listKey: 'needs_and_desires'
+                    });
+                },
                 sectionPhrase: createSectionPhraseTrigger
             }
         };
@@ -983,7 +989,7 @@
     <div class="chat-container" id="chatContainer">
         <div class="message assistant" id="welcomeMessage">
             <div class="message-avatar">C</div>
-            <div class="message-content">Welcome to Chapter 3's Energy Tracker Assessment.<br><br>click the start conversation button below.</div>
+            <div class="message-content">Welcome to Chapter 3's Needs and Desires Explorer.<br><br>click the start conversation button below.</div>
         </div>
     </div>
 
@@ -1052,13 +1058,13 @@
         const themeIcon = document.getElementById('themeIcon');
         const themeText = document.getElementById('themeText');
 
-        const WEBHOOK_URL = 'https://n8n.paruchuri.net/webhook/c174df6e-5834-4eef-a680-ad5aab3536e8/chat';
-
+        const WEBHOOK_URL = 'https://n8n.paruchuri.net/webhook/57715fed-379f-4078-a8a2-5b71dbde70e3/chat';
+        
         const newChatButton = document.getElementById('newChatButton');
 
         const WELCOME_MESSAGE_HTML = '<div class="message assistant">' +
                     '<div class="message-avatar">C<\/div>' +
-                    '<div class="message-content">Welcome to Chapter 3\'s Talent Interest Explorer.<br><br>Click the start conversation button below.<\/div>' +
+                    '<div class="message-content">Welcome to Chapter 3\'s Needs and Desires Explorer.<br><br>Click the start conversation button below.<\/div>' +
                     '<\/div>';
 
         let attachedFiles = [];
@@ -1068,23 +1074,24 @@
         const urlParams = new URLSearchParams(window.location.search);
         const userId = urlParams.get('user_id') || window.PLATFORM_USER_ID || '{{USER_ID}}' || '';
         const courseId = urlParams.get('course_id') || window.PLATFORM_COURSE_ID || '{{COURSE_ID}}' || '';
+
         // ── Document fetch/save hooks — edit when each n8n webhook runs ──
         // SAVE: documentTypeId — this page's output type
         // FETCH: sourceDocumentTypeId — prior page's output to look up (unique per HTML file)
-        const PAGE_SAVE_DOCUMENT_TYPE_ID = 'talent_interest_explorer';
-        const PAGE_FETCH_DOCUMENT_TYPE_ID = 'energy_tracker';
+        const PAGE_SAVE_DOCUMENT_TYPE_ID = 'needs_desires';
+        const PAGE_FETCH_DOCUMENT_TYPE_ID = 'talent_interest_explorer';
 
         const DOCUMENT_WEBHOOK_CONFIG = {
             saveWebhookUrl: ChatDocumentSave.DEFAULT_SAVE_WEBHOOK,
             fetchWebhookUrl: ChatDocumentSave.DEFAULT_FETCH_WEBHOOK,
             documentTypeId: ChatDocumentSave.resolveDocumentTypeId(PAGE_SAVE_DOCUMENT_TYPE_ID),
             sourceDocumentTypeId: ChatDocumentSave.resolveSourceDocumentTypeId(PAGE_FETCH_DOCUMENT_TYPE_ID),
-            sourceDocumentLabel: 'Energy Tracker Results',
+            sourceDocumentLabel: 'Talent Interest Explorer Results',
             fetchOnStartConversation: true,
             fetchOnSendMessage: false,
             saveOnAgentResponse: true,
             showRetrievedDocumentOnScreen: true,
-            saveTrigger: ChatDocumentSave.triggers.topTalentThemes()
+            saveTrigger: ChatDocumentSave.triggers.needsAndDesires()
         };
 
         const documentSave = ChatDocumentSave.create({
@@ -1175,7 +1182,7 @@
             } else {
                 sessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
             }
-            localStorage.setItem('chatSessionId_gpt2', sessionId);
+            localStorage.setItem('chatSessionId_gpt3', sessionId);
             console.log('New Chat – Session ID:', sessionId);
 
             // Clear UI
@@ -1188,8 +1195,8 @@
             attachedFiles = [];
             filePreviewContainer.innerHTML = '';
 
-            // Clear stored conversation if using local storage (GPT2-specific key)
-            localStorage.removeItem('chatHistory_gpt2');
+            // Clear stored conversation if using local storage (GPT3-specific key)
+            localStorage.removeItem('chatHistory_gpt3');
 
             // Show and highlight the start conversation button (new chat state)
             hasHistory = false;
@@ -1229,18 +1236,18 @@
             if (e.target === startOverOverlay) closeStartOverModal();
         });
 
-        // ── Session ID (separate from chat_interface.html / n8n GPT2 session) ─
+        // ── Session ID (separate from chat_interface.html / n8n GPT3 session) ─
         // Use stored sessionId unless missing (then compute and store)
-        let sessionId = localStorage.getItem('chatSessionId_gpt2');
+        let sessionId = localStorage.getItem('chatSessionId_gpt3');
         if (!sessionId) {
             if (userId && courseId) {
                 sessionId = `session_${userId}_${courseId}_${Math.random().toString(36).substring(2, 9)}`;
             } else {
                 sessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
             }
-            localStorage.setItem('chatSessionId_gpt2', sessionId);
+            localStorage.setItem('chatSessionId_gpt3', sessionId);
         }
-        console.log('Session ID (GPT2):', sessionId);
+        console.log('Session ID (GPT3):', sessionId);
 
         // ── Load recent conversation history on page load ─────────
         async function loadRecentMessages() {
@@ -1759,7 +1766,6 @@
 
             if (raw.output != null) {
                 const o = raw.output;
-                if (typeof o === 'string' && o.trim() !== '') console.log('output:', o);
                 if (typeof o === 'string' && o.trim() !== '') return o;
                 const nested = extractN8nWebhookReply(o, depth + 1);
                 if (nested) return nested;

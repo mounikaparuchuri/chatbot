@@ -490,473 +490,6 @@
     </style>
     <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/legacy/build/pdf.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script src="https://cdn.jsdelivr.net/npm/mammoth@1.9.0/mammoth.browser.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-    <script>
-    (function (global) {
-        'use strict';
-
-        var DEFAULT_SAVE_WEBHOOK = 'https://n8n.paruchuri.net/webhook/3a2ede5a-1d84-45ff-8610-ea8a914f2fbe';
-        var DEFAULT_FETCH_WEBHOOK = 'https://n8n.paruchuri.net/webhook/45f3c8a9-030f-4311-b45d-c6fc605bc0c0';
-
-        function tryParseJsonString(str) {
-            if (typeof str !== 'string') return null;
-            var trimmed = str.trim();
-            if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) return null;
-            try { return JSON.parse(trimmed); } catch (_) { return null; }
-        }
-
-        function isMetaDocumentKey(key) {
-            return /^(summary_message|raw_section|raw_talent_themes_section|user_id|course_id|document_type_id|session_id|id|record_id|created_at|updated_at|status|record|metadata|source|received_at)$/i.test(String(key));
-        }
-
-        function isTrivialEmptyContent(val) {
-            if (val == null) return true;
-            if (typeof val === 'string') {
-                var t = val.trim();
-                return !t || /^null$/i.test(t) || /^undefined$/i.test(t);
-            }
-            if (Array.isArray(val)) return val.length === 0;
-            if (typeof val === 'object') return Object.keys(val).length === 0;
-            return false;
-        }
-
-        function hasDisplayableDocumentContent(doc) {
-            if (doc == null) return false;
-            var summary = formatDocumentSummary(doc, '');
-            return !!(summary && summary.trim() && !isTrivialEmptyContent(summary));
-        }
-
-        function extractPayloadContent(doc) {
-            if (doc == null) return null;
-            if (typeof doc === 'string') {
-                var parsed = tryParseJsonString(doc);
-                if (parsed != null) return extractPayloadContent(parsed);
-                if (isTrivialEmptyContent(doc)) return null;
-                return doc;
-            }
-            if (typeof doc !== 'object') return doc;
-            if (Array.isArray(doc)) {
-                return doc.length === 1 ? extractPayloadContent(doc[0]) : doc;
-            }
-
-            if (Object.prototype.hasOwnProperty.call(doc, 'payload') && doc.payload != null) {
-                return extractPayloadContent(doc.payload);
-            }
-
-            var paths = ['record', 'document', 'data'];
-            for (var i = 0; i < paths.length; i++) {
-                var node = doc[paths[i]];
-                if (node == null) continue;
-                if (Array.isArray(node) && node.length) node = node[0];
-                if (typeof node !== 'object') continue;
-                var extracted = extractPayloadContent(node);
-                if (extracted != null && extracted !== doc) return extracted;
-            }
-
-            return doc;
-        }
-
-        function findPayloadInFetchResponse(raw) {
-            if (raw == null) return null;
-            if (typeof raw === 'string') {
-                var trimmed = raw.trim();
-                if (!trimmed) return null;
-                var parsed = tryParseJsonString(trimmed);
-                return parsed != null ? findPayloadInFetchResponse(parsed) : null;
-            }
-            if (typeof raw !== 'object') return null;
-            if (Array.isArray(raw)) {
-                return raw.length ? findPayloadInFetchResponse(raw[0]) : null;
-            }
-
-            if (Object.prototype.hasOwnProperty.call(raw, 'payload') && raw.payload != null && raw.payload !== '') {
-                var payloadContent = extractPayloadContent(raw.payload);
-                if (hasDisplayableDocumentContent(payloadContent)) return payloadContent;
-            }
-
-            var paths = ['record', 'document', 'data'];
-            for (var i = 0; i < paths.length; i++) {
-                var node = raw[paths[i]];
-                if (node == null) continue;
-                if (Array.isArray(node) && node.length) node = node[0];
-                if (typeof node !== 'object') continue;
-                var extracted = findPayloadInFetchResponse(node);
-                if (hasDisplayableDocumentContent(extracted)) return extracted;
-            }
-
-            return null;
-        }
-
-        function extractDocumentFromFetchResponse(raw) {
-            return findPayloadInFetchResponse(raw);
-        }
-
-        function formatDocumentForChatInput(doc, label) {
-            if (doc == null) return '';
-            label = label || 'Loaded document';
-            var readable = formatDocumentSummary(doc, label);
-            return readable ? '\n\n' + readable : '';
-        }
-
-        function humanizeDocumentKey(key) {
-            return String(key).replace(/_/g, ' ').replace(/\b\w/g, function (c) { return c.toUpperCase(); });
-        }
-
-        function formatDocumentValue(val, depth) {
-            depth = depth || 0;
-            if (val == null || val === '') return '';
-
-            if (typeof val === 'string') {
-                var parsed = tryParseJsonString(val);
-                if (parsed != null) return formatDocumentValue(parsed, depth);
-                return val.trim();
-            }
-
-            if (typeof val === 'number' || typeof val === 'boolean') {
-                return String(val);
-            }
-
-            if (Array.isArray(val)) {
-                var items = [];
-                for (var i = 0; i < val.length; i++) {
-                    var item = val[i];
-                    if (item == null || item === '') continue;
-                    if (typeof item === 'object') {
-                        var nested = formatDocumentValue(item, depth + 1);
-                        if (nested) items.push('- ' + nested.replace(/\n/g, '\n  '));
-                    } else {
-                        items.push('- ' + String(item).trim());
-                    }
-                }
-                return items.join('\n');
-            }
-
-            if (typeof val === 'object') {
-                var lines = [];
-                var keys = Object.keys(val);
-                for (var j = 0; j < keys.length; j++) {
-                    var k = keys[j];
-                    if (isMetaDocumentKey(k)) continue;
-                    var v = val[k];
-                    if (v == null || v === '') continue;
-                    var heading = humanizeDocumentKey(k);
-                    if (typeof v === 'object') {
-                        var nestedBlock = formatDocumentValue(v, depth + 1);
-                        if (!nestedBlock) continue;
-                        lines.push('**' + heading + '**');
-                        lines.push(nestedBlock);
-                        lines.push('');
-                    } else {
-                        lines.push('**' + heading + ':** ' + String(v).trim());
-                    }
-                }
-                return lines.join('\n').trim();
-            }
-
-            return String(val);
-        }
-
-        function formatDocumentSummary(doc, label) {
-            if (doc == null) return '';
-            label = label || 'Retrieved summary';
-
-            if (typeof doc === 'string') {
-                var parsedDoc = tryParseJsonString(doc);
-                doc = parsedDoc != null ? parsedDoc : doc;
-            }
-
-            doc = extractPayloadContent(doc);
-            if (doc == null || isTrivialEmptyContent(doc)) return '';
-
-            if (typeof doc === 'string') {
-                var trimmedDoc = doc.trim();
-                return isTrivialEmptyContent(trimmedDoc) ? '' : trimmedDoc;
-            }
-
-            var body = formatDocumentValue(doc, 0);
-            return body ? body.trim() : '';
-        }
-
-        function gatherWebhookStrings(raw, depth, out) {
-            depth = depth || 0;
-            out = out || [];
-            if (depth > 14 || raw == null) return out;
-            if (typeof raw === 'string') {
-                var t = raw.trim();
-                if (t) out.push(t);
-                return out;
-            }
-            if (Array.isArray(raw)) {
-                for (var i = 0; i < raw.length; i++) gatherWebhookStrings(raw[i], depth + 1, out);
-                return out;
-            }
-            if (typeof raw === 'object') {
-                var keys = Object.keys(raw);
-                for (var j = 0; j < keys.length; j++) gatherWebhookStrings(raw[keys[j]], depth + 1, out);
-            }
-            return out;
-        }
-
-        function normalizeSectionText(text) {
-            return text
-                .replace(/\*\*/g, '')
-                .replace(/__/g, '')
-                .replace(/#{1,6}\s+/g, '')
-                .replace(/\r\n/g, '\n');
-        }
-
-        function hasPhrase(text, phraseRe) {
-            if (!text || typeof text !== 'string') return false;
-            return phraseRe.test(normalizeSectionText(text));
-        }
-
-        function findBestMatchingText(responseText, rawData, phraseRe) {
-            var candidates = [];
-            if (responseText && typeof responseText === 'string') candidates.push(responseText.trim());
-            gatherWebhookStrings(rawData).forEach(function (s) {
-                if (hasPhrase(s, phraseRe)) candidates.push(s);
-            });
-            var best = '';
-            for (var i = 0; i < candidates.length; i++) {
-                if (candidates[i].length > best.length) best = candidates[i];
-            }
-            return best || (typeof responseText === 'string' ? responseText.trim() : '');
-        }
-
-        function parseSectionAfterPhrase(text, phraseRe) {
-            if (!text || typeof text !== 'string') return '';
-            var normalized = normalizeSectionText(text);
-            var match = phraseRe.exec(normalized);
-            if (!match) return normalized.trim();
-
-            var after = normalized.slice(match.index + match[0].length).replace(/^[\s:*\-#]+/, '').trim();
-            if (after) return after;
-            return normalized.trim();
-        }
-
-        function documentFromBulletedSection(block, fullText, listKey) {
-            listKey = listKey || 'items';
-            var items = [];
-            var lines = (block || '').split('\n');
-            for (var i = 0; i < lines.length; i++) {
-                var line = lines[i].trim();
-                if (!line) continue;
-                var bullet = line.match(/^\s*(?:\d+[\.\)]\s*|[-*•]\s+)(.+)$/);
-                if (bullet) {
-                    items.push(bullet[1].trim());
-                    continue;
-                }
-                if (!/^#{1,6}\s/.test(line)) items.push(line);
-            }
-            var doc = {};
-            doc[listKey] = items.length ? items : [block.trim()];
-            doc.raw_section = block.trim();
-            if (fullText && typeof fullText === 'string') doc.summary_message = fullText.trim();
-            return doc;
-        }
-
-        function createSectionPhraseTrigger(options) {
-            options = options || {};
-            var phraseRe = options.phrase instanceof RegExp ? options.phrase : new RegExp(options.phrase, 'i');
-            var listKey = options.listKey || 'items';
-            var buildDocument = options.buildDocument;
-
-            return {
-                detect: function (responseText, rawData) {
-                    var text = findBestMatchingText(responseText, rawData, phraseRe);
-                    if (!text || !hasPhrase(text, phraseRe)) return null;
-                    var block = parseSectionAfterPhrase(text, phraseRe);
-                    return {
-                        displayMessage: text,
-                        document: buildDocument
-                            ? buildDocument(text, block)
-                            : documentFromBulletedSection(block, text, listKey)
-                    };
-                }
-            };
-        }
-
-        function createDocumentSave(config) {
-            config = config || {};
-            var saveWebhookUrl = config.saveWebhookUrl || DEFAULT_SAVE_WEBHOOK;
-            var fetchWebhookUrl = config.fetchWebhookUrl || config.saveWebhookUrl || DEFAULT_FETCH_WEBHOOK;
-            var documentTypeId = config.documentTypeId || 'chat_summary';
-            var sourceDocumentTypeId = config.sourceDocumentTypeId || null;
-            var sourceDocumentLabel = config.sourceDocumentLabel || 'Energy Tracker Results';
-            var userId = config.userId || '';
-            var courseId = config.courseId || '';
-            var trigger = config.trigger;
-            var cachedSourceDocument = null;
-            var sourceDocumentFetched = false;
-            var sourceDocumentInjected = false;
-            var sourceDocumentSummaryShown = false;
-
-            if (!trigger || typeof trigger.detect !== 'function') {
-                throw new Error('ChatDocumentSave.create requires config.trigger with detect()');
-            }
-
-            function hasSourceDocumentContent(doc) {
-                return hasDisplayableDocumentContent(doc);
-            }
-
-            async function fetchSourceDocument() {
-                if (!sourceDocumentTypeId) return null;
-                if (sourceDocumentFetched) return cachedSourceDocument;
-                sourceDocumentFetched = true;
-                try {
-                    var res = await fetch(fetchWebhookUrl, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            user_id: userId,
-                            course_id: courseId,
-                            document_type_id: sourceDocumentTypeId
-                        })
-                    });
-                    if (!res.ok) throw new Error('HTTP error! status: ' + res.status);
-                    var data = await res.json().catch(function () { return null; });
-                    cachedSourceDocument = extractDocumentFromFetchResponse(data);
-                    if (!hasSourceDocumentContent(cachedSourceDocument)) {
-                        cachedSourceDocument = null;
-                    }
-                } catch (err) {
-                    console.error('Fetch source document error:', err);
-                    cachedSourceDocument = null;
-                }
-                return cachedSourceDocument;
-            }
-
-            function appendSourceDocumentFields(payload, chatInput) {
-                if (!sourceDocumentTypeId || cachedSourceDocument == null || sourceDocumentInjected) {
-                    return chatInput;
-                }
-                sourceDocumentInjected = true;
-                payload.sourceDocumentTypeId = sourceDocumentTypeId;
-                payload.sourceDocument = cachedSourceDocument;
-                return chatInput + formatDocumentForChatInput(cachedSourceDocument, sourceDocumentLabel);
-            }
-
-            async function prepareAgentPayload(basePayload, chatInput) {
-                if (sourceDocumentTypeId && !sourceDocumentFetched) {
-                    await fetchSourceDocument();
-                }
-                var mergedInput = appendSourceDocumentFields(basePayload, chatInput || '');
-                basePayload.chatInput = mergedInput;
-                return basePayload;
-            }
-
-            function resetSourceDocumentCache() {
-                cachedSourceDocument = null;
-                sourceDocumentFetched = false;
-                sourceDocumentInjected = false;
-                sourceDocumentSummaryShown = false;
-            }
-
-            async function saveDocument(documentPayload) {
-                if (!documentPayload) return;
-                try {
-                    var res = await fetch(saveWebhookUrl, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            user_id: userId,
-                            course_id: courseId,
-                            document_type_id: documentTypeId,
-                            document: documentPayload
-                        })
-                    });
-                    if (!res.ok) throw new Error('HTTP error! status: ' + res.status);
-                    await res.json().catch(function () { return {}; });
-                } catch (err) {
-                    console.error('Save error:', err);
-                }
-            }
-
-            function handleAgentResponse(data, extractReply, addMessage, formatMissing) {
-                var responseText = extractReply(data) || '';
-                var completion = null;
-                try {
-                    completion = trigger.detect(responseText, data);
-                } catch (err) {
-                    console.error('Save trigger detection error:', err);
-                }
-
-                if (completion) {
-                    addMessage(completion.displayMessage, false);
-                    saveDocument(completion.document);
-                    return true;
-                }
-
-                addMessage(responseText || formatMissing(data), false);
-                return false;
-            }
-
-            return {
-                documentTypeId: documentTypeId,
-                sourceDocumentTypeId: sourceDocumentTypeId,
-                detectCompletion: function (responseText, rawData) {
-                    return trigger.detect(responseText, rawData);
-                },
-                fetchSourceDocument: fetchSourceDocument,
-                getSourceDocument: function () { return cachedSourceDocument; },
-                hasSourceDocumentContent: function () { return hasSourceDocumentContent(cachedSourceDocument); },
-                hasShownSourceSummary: function () { return sourceDocumentSummaryShown; },
-                markSourceSummaryShown: function () { sourceDocumentSummaryShown = true; },
-                prepareAgentPayload: prepareAgentPayload,
-                resetSourceDocumentCache: resetSourceDocumentCache,
-                saveDocument: saveDocument,
-                handleAgentResponse: handleAgentResponse
-            };
-        }
-
-        function resolveDocumentTypeId(pageDefault) {
-            var urlParams = new URLSearchParams(global.location && global.location.search || '');
-            return urlParams.get('document_type_id')
-                || pageDefault
-                || (global.PLATFORM_DOC_TYPE)
-                || 'chat_summary';
-        }
-
-        function resolveSourceDocumentTypeId(pageDefault) {
-            var urlParams = new URLSearchParams(global.location && global.location.search || '');
-            return urlParams.get('source_document_type_id')
-                || urlParams.get('fetch_document_type_id')
-                || pageDefault
-                || (global.PLATFORM_SOURCE_DOC_TYPE)
-                || null;
-        }
-
-        function resolveUserContext() {
-            var urlParams = new URLSearchParams(global.location && global.location.search || '');
-            return {
-                userId: urlParams.get('user_id') || global.PLATFORM_USER_ID || '',
-                courseId: urlParams.get('course_id') || global.PLATFORM_COURSE_ID || ''
-            };
-        }
-
-        global.ChatDocumentSave = {
-            DEFAULT_SAVE_WEBHOOK: DEFAULT_SAVE_WEBHOOK,
-            DEFAULT_FETCH_WEBHOOK: DEFAULT_FETCH_WEBHOOK,
-            create: createDocumentSave,
-            resolveDocumentTypeId: resolveDocumentTypeId,
-            resolveSourceDocumentTypeId: resolveSourceDocumentTypeId,
-            resolveUserContext: resolveUserContext,
-            formatDocumentForChatInput: formatDocumentForChatInput,
-            formatDocumentSummary: formatDocumentSummary,
-            extractPayloadContent: extractPayloadContent,
-            isTrivialEmptyContent: isTrivialEmptyContent,
-            hasDisplayableDocumentContent: hasDisplayableDocumentContent,
-            triggers: {
-                topTalentThemes: function () {
-                    return createSectionPhraseTrigger({
-                        phrase: /(?:your\s+)?top\s+\d*\s*talent\s+themes?/i,
-                        listKey: 'top_talent_themes'
-                    });
-                },
-                sectionPhrase: createSectionPhraseTrigger
-            }
-        };
-    })(typeof window !== 'undefined' ? window : this);
-    </script>
 </head>
 <body>
     <div class="header">
@@ -983,7 +516,7 @@
     <div class="chat-container" id="chatContainer">
         <div class="message assistant" id="welcomeMessage">
             <div class="message-avatar">C</div>
-            <div class="message-content">Welcome to Chapter 3's Energy Tracker Assessment.<br><br>click the start conversation button below.</div>
+            <div class="message-content">Welcome to Chapter 3's Experimentation Discovery Explorer.<br><br>click the start conversation button below.</div>
         </div>
     </div>
 
@@ -1052,13 +585,13 @@
         const themeIcon = document.getElementById('themeIcon');
         const themeText = document.getElementById('themeText');
 
-        const WEBHOOK_URL = 'https://n8n.paruchuri.net/webhook/c174df6e-5834-4eef-a680-ad5aab3536e8/chat';
-
+        const WEBHOOK_URL = 'https://n8n.paruchuri.net/webhook/833306bc-04d0-4348-bc4e-cffe74c600ad/chat';
+        
         const newChatButton = document.getElementById('newChatButton');
 
         const WELCOME_MESSAGE_HTML = '<div class="message assistant">' +
                     '<div class="message-avatar">C<\/div>' +
-                    '<div class="message-content">Welcome to Chapter 3\'s Talent Interest Explorer.<br><br>Click the start conversation button below.<\/div>' +
+                    '<div class="message-content">Welcome to Chapter 3\\<br><br>Click the start conversation button below.<\/div>' +
                     '<\/div>';
 
         let attachedFiles = [];
@@ -1066,61 +599,8 @@
 
         // URL params for session (iframe: ?user_id=...&course_id=...)
         const urlParams = new URLSearchParams(window.location.search);
-        const userId = urlParams.get('user_id') || window.PLATFORM_USER_ID || '{{USER_ID}}' || '';
-        const courseId = urlParams.get('course_id') || window.PLATFORM_COURSE_ID || '{{COURSE_ID}}' || '';
-        // ── Document fetch/save hooks — edit when each n8n webhook runs ──
-        // SAVE: documentTypeId — this page's output type
-        // FETCH: sourceDocumentTypeId — prior page's output to look up (unique per HTML file)
-        const PAGE_SAVE_DOCUMENT_TYPE_ID = 'talent_interest_explorer';
-        const PAGE_FETCH_DOCUMENT_TYPE_ID = 'energy_tracker';
-
-        const DOCUMENT_WEBHOOK_CONFIG = {
-            saveWebhookUrl: ChatDocumentSave.DEFAULT_SAVE_WEBHOOK,
-            fetchWebhookUrl: ChatDocumentSave.DEFAULT_FETCH_WEBHOOK,
-            documentTypeId: ChatDocumentSave.resolveDocumentTypeId(PAGE_SAVE_DOCUMENT_TYPE_ID),
-            sourceDocumentTypeId: ChatDocumentSave.resolveSourceDocumentTypeId(PAGE_FETCH_DOCUMENT_TYPE_ID),
-            sourceDocumentLabel: 'Energy Tracker Results',
-            fetchOnStartConversation: true,
-            fetchOnSendMessage: false,
-            saveOnAgentResponse: true,
-            showRetrievedDocumentOnScreen: true,
-            saveTrigger: ChatDocumentSave.triggers.topTalentThemes()
-        };
-
-        const documentSave = ChatDocumentSave.create({
-            saveWebhookUrl: DOCUMENT_WEBHOOK_CONFIG.saveWebhookUrl,
-            fetchWebhookUrl: DOCUMENT_WEBHOOK_CONFIG.fetchWebhookUrl,
-            documentTypeId: DOCUMENT_WEBHOOK_CONFIG.documentTypeId,
-            sourceDocumentTypeId: DOCUMENT_WEBHOOK_CONFIG.sourceDocumentTypeId,
-            sourceDocumentLabel: DOCUMENT_WEBHOOK_CONFIG.sourceDocumentLabel,
-            userId: userId,
-            courseId: courseId,
-            trigger: DOCUMENT_WEBHOOK_CONFIG.saveTrigger
-        });
-
-        async function applyFetchHooks(payload, chatInput, when) {
-            const shouldFetch = (when === 'start' && DOCUMENT_WEBHOOK_CONFIG.fetchOnStartConversation)
-                || (when === 'send' && DOCUMENT_WEBHOOK_CONFIG.fetchOnSendMessage);
-            if (shouldFetch) {
-                await documentSave.prepareAgentPayload(payload, chatInput);
-            } else {
-                payload.chatInput = chatInput;
-            }
-            return payload;
-        }
-
-        function showRetrievedDocumentSummary() {
-            if (!DOCUMENT_WEBHOOK_CONFIG.showRetrievedDocumentOnScreen) return;
-            if (documentSave.hasShownSourceSummary()) return;
-            if (!documentSave.hasSourceDocumentContent()) return;
-            const summary = ChatDocumentSave.formatDocumentSummary(
-                documentSave.getSourceDocument(),
-                DOCUMENT_WEBHOOK_CONFIG.sourceDocumentLabel
-            );
-            if (!summary || ChatDocumentSave.isTrivialEmptyContent(summary)) return;
-            documentSave.markSourceSummaryShown();
-            addMessage('Here is your retrieved summary from the previous work.\n\n' + summary, false);
-        }
+        const userId = '{{USER_ID}}' || '';
+        const courseId = '{{COURSE_ID}}' || '';
 
         // ── Conversation starter button (only for new chat; with history we show input directly) ─────────────────────────
         function updateConversationStarterUI() {
@@ -1175,7 +655,7 @@
             } else {
                 sessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
             }
-            localStorage.setItem('chatSessionId_gpt2', sessionId);
+            localStorage.setItem('chatSessionId_gpt6', sessionId);
             console.log('New Chat – Session ID:', sessionId);
 
             // Clear UI
@@ -1188,8 +668,8 @@
             attachedFiles = [];
             filePreviewContainer.innerHTML = '';
 
-            // Clear stored conversation if using local storage (GPT2-specific key)
-            localStorage.removeItem('chatHistory_gpt2');
+            // Clear stored conversation if using local storage (chatHistory_gpt6)
+            localStorage.removeItem('chatHistory_gpt6');
 
             // Show and highlight the start conversation button (new chat state)
             hasHistory = false;
@@ -1198,8 +678,6 @@
 
             // Scroll to top
             chatContainer.scrollTop = 0;
-
-            documentSave.resetSourceDocumentCache();
         }
 
         const startOverOverlay = document.getElementById('startOverOverlay');
@@ -1229,18 +707,18 @@
             if (e.target === startOverOverlay) closeStartOverModal();
         });
 
-        // ── Session ID (separate from chat_interface.html / n8n GPT2 session) ─
+        // ── Session ID (separate from chat_interface.html / n8n gpt6 session) ─
         // Use stored sessionId unless missing (then compute and store)
-        let sessionId = localStorage.getItem('chatSessionId_gpt2');
+        let sessionId = localStorage.getItem('chatSessionId_gpt6');
         if (!sessionId) {
             if (userId && courseId) {
                 sessionId = `session_${userId}_${courseId}_${Math.random().toString(36).substring(2, 9)}`;
             } else {
                 sessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
             }
-            localStorage.setItem('chatSessionId_gpt2', sessionId);
+            localStorage.setItem('chatSessionId_gpt6', sessionId);
         }
-        console.log('Session ID (GPT2):', sessionId);
+        console.log('Session ID (gpt6):', sessionId);
 
         // ── Load recent conversation history on page load ─────────
         async function loadRecentMessages() {
@@ -1649,9 +1127,7 @@
         function formatMessage(text) {
             if (text == null) return '';
             if (typeof text !== 'string') {
-                text = (typeof ChatDocumentSave !== 'undefined' && ChatDocumentSave.formatDocumentSummary)
-                    ? ChatDocumentSave.formatDocumentSummary(text, 'Summary')
-                    : String(text);
+                text = (typeof text === 'object' ? JSON.stringify(text, null, 2) : String(text));
             }
             text = text.replace(/&/g, '&amp;')
                        .replace(/</g, '&lt;')
@@ -1666,20 +1142,9 @@
             text = text.replace(/\*([^*]+)\*/g, '<em>$1<\/em>');
             text = text.replace(/_([^_]+)_/g, '<em>$1<\/em>');
             text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1<\/a>');
-            text = text.replace(/(?:^|\n)((?:[\-\*]\s+.+(?:\n|$))+)/g, function (match, block) {
-                var items = block.trim().split('\n').map(function (line) {
-                    var m = line.match(/^[\-\*]\s+(.+)$/);
-                    return m ? '<li>' + m[1] + '</li>' : line;
-                }).join('');
-                return '\n<ul>' + items + '</ul>\n';
-            });
-            text = text.replace(/(?:^|\n)((?:\d+\.\s+.+(?:\n|$))+)/g, function (match, block) {
-                var items = block.trim().split('\n').map(function (line) {
-                    var m = line.match(/^\d+\.\s+(.+)$/);
-                    return m ? '<li>' + m[1] + '</li>' : line;
-                }).join('');
-                return '\n<ol>' + items + '</ol>\n';
-            });
+            text = text.replace(/^[\-\*]\s+(.+)$/gm, '<li>$1<\/li>');
+            text = text.replace(/(<li>.*<\/li>)/s, '<ul>$1<\/ul>');
+            text = text.replace(/^\d+\.\s+(.+)$/gm, '<li>$1<\/li>');
             text = text.replace(/\n/g, '<br>');
 
             return text;
@@ -1813,70 +1278,27 @@
                 + JSON.stringify(data, null, 2);
         }
 
-        function handleAgentResponse(data) {
-            if (DOCUMENT_WEBHOOK_CONFIG.saveOnAgentResponse) {
-                return documentSave.handleAgentResponse(
-                    data,
-                    extractN8nWebhookReply,
-                    addMessage,
-                    formatMissingWebhookReply
-                );
-            }
-            const responseText = extractN8nWebhookReply(data) || formatMissingWebhookReply(data);
-            addMessage(responseText, false);
-            return false;
-        }
-
         // ── Start conversation: webhook only, no user message in chat ──
         async function triggerStarterOnly(starterText) {
-            // #region agent log
-            var _t0 = Date.now();
-            fetch('http://127.0.0.1:7907/ingest/57e47666-fc1b-41af-8061-71b696c59f5b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'8203d6'},body:JSON.stringify({sessionId:'8203d6',location:'chat_interface.html:triggerStarterOnly',message:'phase_start',data:{phase:'entry',elapsedMs:0},timestamp:Date.now(),hypothesisId:'D'})}).catch(function(){});
-            // #endregion
             setConversationStarterVisible(false);
             if (messageInput) messageInput.placeholder = 'Type your message here...';
             addLoadingMessage();
-            // #region agent log
-            fetch('http://127.0.0.1:7907/ingest/57e47666-fc1b-41af-8061-71b696c59f5b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'8203d6'},body:JSON.stringify({sessionId:'8203d6',location:'chat_interface.html:triggerStarterOnly',message:'phase_after_initial_dom',data:{phase:'after_initial_dom',elapsedMs:Date.now()-_t0},timestamp:Date.now(),hypothesisId:'D'})}).catch(function(){});
-            var _tFetchStart = Date.now();
-            // #endregion
             try {
-                const payload = {
-                    sessionId: sessionId,
-                    chatInput: starterText,
-                    timestamp: new Date().toISOString()
-                };
-                await applyFetchHooks(payload, starterText, 'start');
-                removeLoadingMessage();
-                if (documentSave.hasSourceDocumentContent()) {
-                    showRetrievedDocumentSummary();
-                } else {
-                    payload.chatInput = starterText;
-                    delete payload.sourceDocument;
-                    delete payload.sourceDocumentTypeId;
-                }
-                addLoadingMessage();
-
                 const response = await fetch(WEBHOOK_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
+                    body: JSON.stringify({
+                        sessionId: sessionId,
+                        chatInput: starterText,
+                        timestamp: new Date().toISOString()
+                    })
                 });
-                // #region agent log
-                fetch('http://127.0.0.1:7907/ingest/57e47666-fc1b-41af-8061-71b696c59f5b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'8203d6'},body:JSON.stringify({sessionId:'8203d6',location:'chat_interface.html:triggerStarterOnly',message:'phase_after_fetch',data:{phase:'after_fetch',elapsedMs:Date.now()-_t0,fetchMs:Date.now()-_tFetchStart},timestamp:Date.now(),hypothesisId:'A'})}).catch(function(){});
-                var _tParseStart = Date.now();
-                // #endregion
                 if (!response.ok) throw new Error('HTTP error! status: ' + response.status);
                 const data = await response.json();
-                // #region agent log
-                fetch('http://127.0.0.1:7907/ingest/57e47666-fc1b-41af-8061-71b696c59f5b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'8203d6'},body:JSON.stringify({sessionId:'8203d6',location:'chat_interface.html:triggerStarterOnly',message:'phase_after_json',data:{phase:'after_json',elapsedMs:Date.now()-_t0,parseMs:Date.now()-_tParseStart},timestamp:Date.now(),hypothesisId:'B'})}).catch(function(){});
-                var _tDomStart = Date.now();
-                // #endregion
                 removeLoadingMessage();
-                handleAgentResponse(data);
-                // #region agent log
-                fetch('http://127.0.0.1:7907/ingest/57e47666-fc1b-41af-8061-71b696c59f5b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'8203d6'},body:JSON.stringify({sessionId:'8203d6',location:'chat_interface.html:triggerStarterOnly',message:'phase_after_addMessage',data:{phase:'after_addMessage',elapsedMs:Date.now()-_t0,domMs:Date.now()-_tDomStart},timestamp:Date.now(),hypothesisId:'C'})}).catch(function(){});
-                // #endregion
+                const responseText = extractN8nWebhookReply(data) || formatMissingWebhookReply(data);
+                //const responseText = typeof data.assistant_text === 'string' ? data.assistant_text : 'No assistant_text field found in webhook response.';
+                addMessage(responseText, false);
             } catch (error) {
                 console.error('Error:', error);
                 removeLoadingMessage();
@@ -1894,9 +1316,6 @@
                 chatContainer.scrollTop = chatContainer.scrollHeight;
             }
             messageInput.focus();
-            // #region agent log
-            fetch('http://127.0.0.1:7907/ingest/57e47666-fc1b-41af-8061-71b696c59f5b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'8203d6'},body:JSON.stringify({sessionId:'8203d6',location:'chat_interface.html:triggerStarterOnly',message:'phase_end',data:{phase:'end',elapsedMs:Date.now()-_t0},timestamp:Date.now(),hypothesisId:'E'})}).catch(function(){});
-            // #endregion
         }
 
         // ── Send message ─────────────────────────────────────────
@@ -1946,8 +1365,6 @@
 
                 if (filesData.length > 0) payload.files = filesData;
 
-                await applyFetchHooks(payload, chatInputMerged, 'send');
-
                 const response = await fetch(WEBHOOK_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -1959,7 +1376,8 @@
                 const data = await response.json();
                 removeLoadingMessage();
 
-                handleAgentResponse(data);
+                const responseText = extractN8nWebhookReply(data) || formatMissingWebhookReply(data);
+                addMessage(responseText, false);
 
             } catch (error) {
                 console.error('Error:', error);

@@ -490,7 +490,7 @@
     </style>
     <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/legacy/build/pdf.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script src="https://cdn.jsdelivr.net/npm/mammoth@1.9.0/mammoth.browser.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-    <script>
+        <script>
     (function (global) {
         'use strict';
 
@@ -781,7 +781,7 @@
             var fetchWebhookUrl = config.fetchWebhookUrl || config.saveWebhookUrl || DEFAULT_FETCH_WEBHOOK;
             var documentTypeId = config.documentTypeId || 'chat_summary';
             var sourceDocumentTypeId = config.sourceDocumentTypeId || null;
-            var sourceDocumentLabel = config.sourceDocumentLabel || 'Energy Tracker Results';
+            var sourceDocumentLabel = config.sourceDocumentLabel || 'Loaded document';
             var userId = config.userId || '';
             var courseId = config.courseId || '';
             var trigger = config.trigger;
@@ -952,11 +952,18 @@
                         listKey: 'top_talent_themes'
                     });
                 },
+                needsAndDesires: function () {
+                    return createSectionPhraseTrigger({
+                        phrase: /(?:your\s+)?needs\s+(?:and\s+desires)?\s*summary/i,
+                        listKey: 'needs_and_desires'
+                    });
+                },
                 sectionPhrase: createSectionPhraseTrigger
             }
         };
     })(typeof window !== 'undefined' ? window : this);
     </script>
+
 </head>
 <body>
     <div class="header">
@@ -1053,7 +1060,7 @@
         const themeText = document.getElementById('themeText');
 
         const WEBHOOK_URL = 'https://n8n.paruchuri.net/webhook/c174df6e-5834-4eef-a680-ad5aab3536e8/chat';
-
+        
         const newChatButton = document.getElementById('newChatButton');
 
         const WELCOME_MESSAGE_HTML = '<div class="message assistant">' +
@@ -1068,6 +1075,7 @@
         const urlParams = new URLSearchParams(window.location.search);
         const userId = urlParams.get('user_id') || window.PLATFORM_USER_ID || '{{USER_ID}}' || '';
         const courseId = urlParams.get('course_id') || window.PLATFORM_COURSE_ID || '{{COURSE_ID}}' || '';
+
         // ── Document fetch/save hooks — edit when each n8n webhook runs ──
         // SAVE: documentTypeId — this page's output type
         // FETCH: sourceDocumentTypeId — prior page's output to look up (unique per HTML file)
@@ -1188,7 +1196,7 @@
             attachedFiles = [];
             filePreviewContainer.innerHTML = '';
 
-            // Clear stored conversation if using local storage (GPT2-specific key)
+            // Clear stored conversation if using local storage (chatHistory_gpt2)
             localStorage.removeItem('chatHistory_gpt2');
 
             // Show and highlight the start conversation button (new chat state)
@@ -1759,7 +1767,6 @@
 
             if (raw.output != null) {
                 const o = raw.output;
-                if (typeof o === 'string' && o.trim() !== '') console.log('output:', o);
                 if (typeof o === 'string' && o.trim() !== '') return o;
                 const nested = extractN8nWebhookReply(o, depth + 1);
                 if (nested) return nested;
@@ -1829,17 +1836,9 @@
 
         // ── Start conversation: webhook only, no user message in chat ──
         async function triggerStarterOnly(starterText) {
-            // #region agent log
-            var _t0 = Date.now();
-            fetch('http://127.0.0.1:7907/ingest/57e47666-fc1b-41af-8061-71b696c59f5b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'8203d6'},body:JSON.stringify({sessionId:'8203d6',location:'chat_interface.html:triggerStarterOnly',message:'phase_start',data:{phase:'entry',elapsedMs:0},timestamp:Date.now(),hypothesisId:'D'})}).catch(function(){});
-            // #endregion
             setConversationStarterVisible(false);
             if (messageInput) messageInput.placeholder = 'Type your message here...';
             addLoadingMessage();
-            // #region agent log
-            fetch('http://127.0.0.1:7907/ingest/57e47666-fc1b-41af-8061-71b696c59f5b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'8203d6'},body:JSON.stringify({sessionId:'8203d6',location:'chat_interface.html:triggerStarterOnly',message:'phase_after_initial_dom',data:{phase:'after_initial_dom',elapsedMs:Date.now()-_t0},timestamp:Date.now(),hypothesisId:'D'})}).catch(function(){});
-            var _tFetchStart = Date.now();
-            // #endregion
             try {
                 const payload = {
                     sessionId: sessionId,
@@ -1862,21 +1861,10 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
                 });
-                // #region agent log
-                fetch('http://127.0.0.1:7907/ingest/57e47666-fc1b-41af-8061-71b696c59f5b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'8203d6'},body:JSON.stringify({sessionId:'8203d6',location:'chat_interface.html:triggerStarterOnly',message:'phase_after_fetch',data:{phase:'after_fetch',elapsedMs:Date.now()-_t0,fetchMs:Date.now()-_tFetchStart},timestamp:Date.now(),hypothesisId:'A'})}).catch(function(){});
-                var _tParseStart = Date.now();
-                // #endregion
                 if (!response.ok) throw new Error('HTTP error! status: ' + response.status);
                 const data = await response.json();
-                // #region agent log
-                fetch('http://127.0.0.1:7907/ingest/57e47666-fc1b-41af-8061-71b696c59f5b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'8203d6'},body:JSON.stringify({sessionId:'8203d6',location:'chat_interface.html:triggerStarterOnly',message:'phase_after_json',data:{phase:'after_json',elapsedMs:Date.now()-_t0,parseMs:Date.now()-_tParseStart},timestamp:Date.now(),hypothesisId:'B'})}).catch(function(){});
-                var _tDomStart = Date.now();
-                // #endregion
                 removeLoadingMessage();
                 handleAgentResponse(data);
-                // #region agent log
-                fetch('http://127.0.0.1:7907/ingest/57e47666-fc1b-41af-8061-71b696c59f5b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'8203d6'},body:JSON.stringify({sessionId:'8203d6',location:'chat_interface.html:triggerStarterOnly',message:'phase_after_addMessage',data:{phase:'after_addMessage',elapsedMs:Date.now()-_t0,domMs:Date.now()-_tDomStart},timestamp:Date.now(),hypothesisId:'C'})}).catch(function(){});
-                // #endregion
             } catch (error) {
                 console.error('Error:', error);
                 removeLoadingMessage();
@@ -1894,9 +1882,6 @@
                 chatContainer.scrollTop = chatContainer.scrollHeight;
             }
             messageInput.focus();
-            // #region agent log
-            fetch('http://127.0.0.1:7907/ingest/57e47666-fc1b-41af-8061-71b696c59f5b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'8203d6'},body:JSON.stringify({sessionId:'8203d6',location:'chat_interface.html:triggerStarterOnly',message:'phase_end',data:{phase:'end',elapsedMs:Date.now()-_t0},timestamp:Date.now(),hypothesisId:'E'})}).catch(function(){});
-            // #endregion
         }
 
         // ── Send message ─────────────────────────────────────────

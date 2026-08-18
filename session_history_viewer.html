@@ -1,0 +1,894 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chapter 3 · Session History</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-primary: #f5f5f5;
+            --bg-secondary: #fff;
+            --bg-tertiary: #f0f0f0;
+            --border-color: #e5e5e5;
+            --text-primary: #1a1a1a;
+            --text-secondary: #666;
+            --text-tertiary: #999;
+            --input-border: #d0d0d0;
+            --shadow: rgba(0, 0, 0, 0.05);
+            --error-bg: #fce8e6;
+            --error-text: #d93025;
+        }
+
+        body.dark-mode {
+            --bg-primary: #1a1a1a;
+            --bg-secondary: #2d2d2d;
+            --bg-tertiary: #3d3d3d;
+            --border-color: #404040;
+            --text-primary: #e5e5e5;
+            --text-secondary: #b0b0b0;
+            --text-tertiary: #808080;
+            --input-border: #505050;
+            --shadow: rgba(0, 0, 0, 0.3);
+            --error-bg: #5c2a2a;
+            --error-text: #ff6b6b;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            transition: background-color 0.3s, color 0.3s;
+        }
+
+        .header {
+            background-color: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
+            padding: 16px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .header-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .id-chip {
+            font-size: 12px;
+            color: var(--text-tertiary);
+            background-color: var(--bg-tertiary);
+            padding: 5px 12px;
+            border-radius: 20px;
+            white-space: nowrap;
+        }
+
+        .theme-toggle {
+            background-color: #0A403D;
+            border: 1px solid #0A403D;
+            border-radius: 6px;
+            padding: 8px 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 14px;
+            color: white;
+            transition: all 0.2s;
+        }
+
+        .theme-toggle:hover {
+            background-color: #0d5c57;
+            border-color: #0d5c57;
+        }
+
+        .theme-icon {
+            width: 16px;
+            height: 16px;
+        }
+
+        /* ── Breadcrumb ─────────────────────────────────────────── */
+        .breadcrumb {
+            background-color: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
+            padding: 10px 24px;
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 6px;
+            font-size: 13px;
+        }
+
+        .crumb {
+            color: var(--text-secondary);
+            cursor: pointer;
+        }
+
+        .crumb:hover {
+            color: #0A403D;
+            text-decoration: underline;
+        }
+
+        .crumb.current {
+            color: var(--text-primary);
+            font-weight: 600;
+            cursor: default;
+            text-decoration: none;
+        }
+
+        .crumb-sep {
+            color: var(--text-tertiary);
+        }
+
+        /* ── Content / views ────────────────────────────────────── */
+        .content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 24px;
+        }
+
+        .content-inner {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .view {
+            display: none;
+            flex-direction: column;
+        }
+
+        .view.active {
+            display: flex;
+        }
+
+        .view-heading {
+            margin-bottom: 18px;
+        }
+
+        .view-heading h1 {
+            font-size: 20px;
+            font-weight: 600;
+        }
+
+        .view-sub {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+
+        .back-btn {
+            background: none;
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            border-radius: 6px;
+            padding: 6px 12px;
+            font-size: 13px;
+            cursor: pointer;
+            margin-bottom: 14px;
+        }
+
+        .back-btn:hover {
+            border-color: #0A403D;
+            color: #0A403D;
+        }
+
+        .transcript-meta {
+            font-size: 12px;
+            color: var(--text-tertiary);
+            margin-top: 4px;
+            font-family: 'Courier New', monospace;
+        }
+
+        /* ── Module grid ────────────────────────────────────────── */
+        .module-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+            gap: 14px;
+        }
+
+        .module-card {
+            background-color: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 16px 18px;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            text-align: left;
+            cursor: pointer;
+            font-family: inherit;
+            transition: box-shadow 0.15s, border-color 0.15s, transform 0.15s;
+        }
+
+        .module-card:hover {
+            border-color: #0A403D;
+            box-shadow: 0 2px 10px var(--shadow);
+            transform: translateY(-1px);
+        }
+
+        .module-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 16px;
+            color: white;
+        }
+
+        .module-card-body {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .module-card-title {
+            font-weight: 600;
+            font-size: 15px;
+            color: var(--text-primary);
+        }
+
+        .module-card-desc {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-top: 2px;
+        }
+
+        .module-card-chevron {
+            color: var(--text-tertiary);
+            font-size: 18px;
+            flex-shrink: 0;
+        }
+
+        /* ── Missing-IDs banner (manual override for local testing) ── */
+        .missing-ids-banner {
+            margin-top: 22px;
+            padding: 16px 18px;
+            border: 1px dashed var(--border-color);
+            border-radius: 10px;
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .manual-form {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+            flex-wrap: wrap;
+        }
+
+        .manual-form input {
+            padding: 8px 10px;
+            border: 1px solid var(--input-border);
+            border-radius: 6px;
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            font-size: 13px;
+            min-width: 160px;
+        }
+
+        .manual-form button {
+            background-color: #0A403D;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 8px 16px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+
+        .manual-form button:hover {
+            background-color: #0d5c57;
+        }
+
+        /* ── Session list ───────────────────────────────────────── */
+        .session-card {
+            background-color: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 14px 16px;
+            margin-bottom: 10px;
+            cursor: pointer;
+            transition: box-shadow 0.15s, border-color 0.15s;
+        }
+
+        .session-card:hover {
+            border-color: #0A403D;
+            box-shadow: 0 1px 6px var(--shadow);
+        }
+
+        .session-card-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            gap: 10px;
+        }
+
+        .session-card-count {
+            font-size: 12px;
+            color: var(--text-tertiary);
+            white-space: nowrap;
+        }
+
+        .session-card-preview {
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-top: 6px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+        }
+
+        /* ── State messages (loading / error / empty) ──────────── */
+        .state-message {
+            padding: 40px 20px;
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+
+        .state-message.error {
+            color: var(--error-text);
+        }
+
+        .retry-btn {
+            margin-top: 14px;
+            background-color: #0A403D;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 8px 18px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+
+        .retry-btn:hover {
+            background-color: #0d5c57;
+        }
+
+        .loading {
+            display: flex;
+            justify-content: center;
+            gap: 4px;
+            padding: 8px;
+        }
+
+        .loading-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: var(--text-tertiary);
+            animation: loading 1.4s infinite;
+        }
+
+        .loading-dot:nth-child(2) { animation-delay: 0.2s; }
+        .loading-dot:nth-child(3) { animation-delay: 0.4s; }
+
+        @keyframes loading {
+            0%, 60%, 100% { opacity: 0.3; }
+            30% { opacity: 1; }
+        }
+
+        /* ── Transcript (plain formatted document) ─────────────── */
+        .chat-container {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        .summary-doc {
+            line-height: 1.7;
+            color: var(--text-primary);
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+        }
+
+        .summary-doc h1,
+        .summary-doc h2,
+        .summary-doc h3,
+        .summary-doc h4 {
+            font-weight: 600;
+            margin: 20px 0 8px;
+        }
+
+        .summary-doc h1:first-child,
+        .summary-doc h2:first-child,
+        .summary-doc h3:first-child,
+        .summary-doc h4:first-child {
+            margin-top: 0;
+        }
+
+        .summary-doc code {
+            background-color: var(--bg-tertiary);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+
+        .summary-doc pre {
+            background-color: var(--bg-tertiary);
+            padding: 12px;
+            border-radius: 6px;
+            overflow-x: auto;
+            margin: 8px 0;
+        }
+
+        .summary-doc pre code {
+            background-color: transparent;
+            padding: 0;
+            font-size: 0.85em;
+            line-height: 1.5;
+        }
+
+        .summary-doc ul,
+        .summary-doc ol {
+            margin: 8px 0;
+            padding-left: 24px;
+        }
+
+        .summary-doc li {
+            margin: 4px 0;
+        }
+
+        .summary-doc a {
+            color: #5436DA;
+            text-decoration: underline;
+        }
+
+        .summary-doc strong {
+            font-weight: 600;
+        }
+
+        .summary-doc em {
+            font-style: italic;
+        }
+
+        @media (max-width: 640px) {
+            .header { padding: 12px 16px; }
+            .breadcrumb { padding: 8px 16px; }
+            .content { padding: 16px; }
+            .id-chip { display: none; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-left">
+            <div class="header-title">Session History</div>
+        </div>
+        <div class="header-right">
+            <div class="id-chip" id="idChip"></div>
+            <button class="theme-toggle" id="themeToggle">
+                <svg class="theme-icon" id="themeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="5"></circle>
+                    <line x1="12" y1="1" x2="12" y2="3"></line>
+                    <line x1="12" y1="21" x2="12" y2="23"></line>
+                    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                    <line x1="1" y1="12" x2="3" y2="12"></line>
+                    <line x1="21" y1="12" x2="23" y2="12"></line>
+                    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                    <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                </svg>
+                <span id="themeText">Dark</span>
+            </button>
+        </div>
+    </div>
+
+    <nav class="breadcrumb" id="breadcrumb"></nav>
+
+    <main class="content">
+        <div class="content-inner">
+
+            <section class="view active" id="modulesView">
+                <div class="view-heading">
+                    <h1>Choose a module</h1>
+                    <p class="view-sub">Pick the conversation module you want to review, then pick a session.</p>
+                </div>
+                <div class="module-grid" id="moduleGrid"></div>
+                <div class="missing-ids-banner" id="missingIdsBanner" style="display:none">
+                    This page needs a learner and course to look up sessions. Normally these arrive
+                    automatically from LearnWorlds, or via <code>?user_id=...&amp;course_id=...</code> in the URL.
+                    For local testing, enter them here:
+                    <div class="manual-form">
+                        <input type="text" id="manualUserId" placeholder="user_id">
+                        <input type="text" id="manualCourseId" placeholder="course_id">
+                        <button id="manualIdsSubmit" type="button">Use these IDs</button>
+                    </div>
+                </div>
+            </section>
+
+            <section class="view" id="transcriptView">
+                <button class="back-btn" data-back="modules">‹ All modules</button>
+                <div class="view-heading">
+                    <h1 id="transcriptTitle"></h1>
+                    <div class="transcript-meta" id="transcriptMeta"></div>
+                </div>
+                <div class="chat-container" id="transcriptContainer"></div>
+            </section>
+
+        </div>
+    </main>
+
+    <script>
+        // ── Module registry ─────────────────────────────────────────
+        // Every module shares the same n8n webhook (SUMMARY_WEBHOOK_URL below) —
+        // the only thing that differs per module is queryString, which the shared
+        // workflow uses to filter which summary message it pulls back.
+        const MODULES = [
+            { id: 'readiness', label: 'Readiness Assessment', description: 'Initial readiness profile', color: '#0A403D', queryString: 'Readiness Summary' },
+            { id: 'gpt2_talents', label: 'Talent Interest Explorer', description: 'Talents & interests', color: '#5436DA', queryString: 'Top talent themes' },
+            { id: 'gpt3_needs', label: 'Needs & Desires Explorer', description: 'Needs & desires', color: '#d97757', queryString: 'this inventory is not a final decision' },
+            { id: 'gpt4_possibility', label: 'Possibility Explorer', description: 'Possibility exploration', color: '#1f7a5c', queryString: 'these paths are not final decisions' },
+            { id: 'gpt5_exp_milestone', label: 'Experimentation Milestone And Plan Discovery', description: 'Experimentation & milestones', color: '#8a3ffc', queryString: 'this is not a final decision' },
+            //{ id: 'gpt6_plan_discovery', label: 'Plan Discovery', description: 'Experimentation plan discovery', color: '#c2410c', queryString: 'planned narrative is an important step toward making progress' },
+            { id: 'gpt7_native_reposition', label: 'Native Reposition', description: 'Personal narrative & positioning', color: '#0e7490', queryString: 'planned narrative is an important step toward making progress' },
+            { id: 'gpt8_direction_lock', label: 'Direction Lock', description: 'Direction lock & activation plan', color: '#7c2d12', queryString: 'This is not about having a perfect plan' /* TODO: fill in this module's summary marker text */ }
+        ];
+
+        // Single shared n8n workflow used by every module for both session listing
+        // and full transcript loading — differentiated by which fields are sent
+        // ({ user_id, course_id, queryString } vs { user_id, course_id, sessionId }).
+        const SUMMARY_WEBHOOK_URL = 'https://n8n.paruchuri.net/webhook/311d13f2-17b5-49d3-859d-860b0c0e1d83';
+        // 'https://n8n.paruchuri.net/webhook/311d13f2-17b5-49d3-859d-860b0c0e1d83';
+        
+        // ── Learner / course resolution ──────────────────────────────
+        const urlParams = new URLSearchParams(window.location.search);
+        let userId = urlParams.get('user_id') || window.PLATFORM_USER_ID || '{{USER_ID}}' || '';
+        let courseId = urlParams.get('course_id') || window.PLATFORM_COURSE_ID || '{{COURSE_ID}}' || '';
+        // Guard against the raw LearnWorlds placeholder when this file is opened
+        // directly (outside LearnWorlds, no server-side templating happened).
+        if (userId === '{{USER_ID}}') userId = '';
+        if (courseId === '{{COURSE_ID}}') courseId = '';
+
+        // ── State ──────────────────────────────────────────────────
+        const state = { view: 'modules', module: null };
+        const sessionsCache = {}; // moduleId -> { status: 'ok'|'error', messages: [] }
+
+        // ── Dark mode ─────────────────────────────────────────────
+        const themeToggle = document.getElementById('themeToggle');
+        const themeIcon = document.getElementById('themeIcon');
+        const themeText = document.getElementById('themeText');
+        const savedTheme = localStorage.getItem('theme') || 'light';
+        if (savedTheme === 'dark') {
+            document.body.classList.add('dark-mode');
+            updateThemeIcon(true);
+        }
+        themeToggle.addEventListener('click', () => {
+            const isDark = document.body.classList.toggle('dark-mode');
+            localStorage.setItem('theme', isDark ? 'dark' : 'light');
+            updateThemeIcon(isDark);
+        });
+        function updateThemeIcon(isDark) {
+            if (isDark) {
+                themeIcon.innerHTML = '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>';
+                themeText.textContent = 'Light';
+            } else {
+                themeIcon.innerHTML = '<circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>';
+                themeText.textContent = 'Dark';
+            }
+        }
+
+        // ── Small helpers ─────────────────────────────────────────
+        function escapeHtml(text) {
+            if (text == null) return '';
+            if (typeof text !== 'string') text = String(text);
+            return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                        .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+        }
+
+        function formatMessage(text) {
+            if (text == null) return '';
+            if (typeof text !== 'string') {
+                text = (typeof text === 'object' ? JSON.stringify(text, null, 2) : String(text));
+            }
+            text = escapeHtml(text);
+            text = text.replace(/^#### (.+)$/gm, '<h4>$1</h4>');
+            text = text.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+            text = text.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+            text = text.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+            text = text.replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
+            text = text.replace(/`([^`]+)`/g, '<code>$1</code>');
+            text = text.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+            text = text.replace(/__([^_]+)__/g, '<strong>$1</strong>');
+            text = text.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+            text = text.replace(/_([^_]+)_/g, '<em>$1</em>');
+            text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+            text = text.replace(/^[\-\*]\s+(.+)$/gm, '<li>$1</li>');
+            text = text.replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>');
+            text = text.replace(/^\d+\.\s+(.+)$/gm, '<li>$1</li>');
+            text = text.replace(/\n/g, '<br>');
+            return text;
+        }
+
+        function loadingHtml(label) {
+            return '<div class="state-message">' +
+                     '<div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>' +
+                     '<div style="margin-top:10px;">' + escapeHtml(label) + '</div>' +
+                   '</div>';
+        }
+
+        function stateMessageHtml(kind, text, withRetry) {
+            return '<div class="state-message' + (kind === 'error' ? ' error' : '') + '">' +
+                     escapeHtml(text) +
+                     (withRetry ? '<br><button class="retry-btn" id="retryBtn" type="button">Retry</button>' : '') +
+                   '</div>';
+        }
+
+        // ── Webhook I/O ───────────────────────────────────────────
+        async function postWebhook(webhookUrl, body) {
+            const res = await fetch(webhookUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            if (!res.ok) throw new Error('request failed (' + res.status + ')');
+            const text = await res.text();
+            if (!text.trim()) return null;
+            return JSON.parse(text);
+        }
+
+        // Contract — POST { user_id, course_id, queryString } to SUMMARY_WEBHOOK_URL,
+        // expect either { data: [ { sessionId, createdAt, firstMessage, messageCount }, ... ] },
+        // or (the actual shape this workflow returns today) a single bare
+        // { message_pretty: "<plain markdown text>" } object with no session identifier —
+        // fallbackSessionId is used to key that single entry (pass module.id).
+        function normalizeSessions(raw, fallbackSessionId) {
+            let list;
+            if (Array.isArray(raw)) list = raw;
+            else if (Array.isArray(raw?.data)) list = raw.data;
+            else if (raw && typeof raw === 'object' && typeof raw.message_pretty === 'string') list = [raw];
+            else list = [];
+
+            return list.map(item => {
+                const sessionId = item.sessionId ?? item.session_id ?? item.id ?? fallbackSessionId ?? '';
+                const createdAtRaw = item.createdAt ?? item.created_at ?? item.timestamp ?? item.startedAt ?? item.started_at ?? null;
+                const createdAt = createdAtRaw ? new Date(createdAtRaw) : null;
+                let preview = item.firstMessage ?? item.first_message ?? item.preview ?? item.title ?? '';
+                let messageCount = item.messageCount ?? item.message_count ?? null;
+
+                // Fallback: some workflows may just return each session's raw message array
+                if (!preview && Array.isArray(item.messages)) {
+                    const firstHuman = item.messages.find(m => {
+                        const idPath = m?.id ?? [];
+                        return (idPath[idPath.length - 1] === 'HumanMessage') || m?.type === 'human';
+                    });
+                    if (firstHuman) preview = firstHuman.kwargs?.content ?? firstHuman.content ?? '';
+                    if (messageCount == null) messageCount = item.messages.length;
+                }
+
+                // message_pretty is the module's summary as plain markdown text — use directly.
+                if (!preview && typeof item.message_pretty === 'string') {
+                    preview = item.message_pretty;
+                }
+
+                return {
+                    sessionId: String(sessionId),
+                    createdAt,
+                    preview: String(preview || '').trim(),
+                    messageCount
+                };
+            }).filter(s => s.sessionId);
+        }
+
+        // Same filter used by the live chat interfaces' loadPreviousSession handler:
+        // keep only real human/AI turns, drop tool calls, system messages, empty content.
+        function filterConversationMessages(messages) {
+            if (!Array.isArray(messages)) return [];
+            return messages.filter(msg => {
+                const idPath = msg?.id ?? [];
+                const classType = idPath[idPath.length - 1] ?? '';
+                const typeField = msg?.type ?? '';
+                const isHuman = classType === 'HumanMessage' || typeField === 'human';
+                const isAI = classType === 'AIMessage' || typeField === 'ai';
+                if (!isHuman && !isAI) return false;
+
+                const content = msg?.kwargs?.content ?? msg?.content ?? '';
+                const toolCalls = msg?.kwargs?.tool_calls ?? msg?.tool_calls ?? [];
+                if (typeof content !== 'string' || content.trim() === '') return false;
+                if (isAI && Array.isArray(toolCalls) && toolCalls.length > 0) return false;
+                if (isAI && /^Calling\s+\S+\s+with\s+input:/i.test(content.trim())) return false;
+                return true;
+            });
+        }
+
+        // ── Rendering: modules ────────────────────────────────────
+        function renderModules() {
+            const grid = document.getElementById('moduleGrid');
+            grid.innerHTML = '';
+            MODULES.forEach(m => {
+                const card = document.createElement('button');
+                card.type = 'button';
+                card.className = 'module-card';
+
+                const avatar = document.createElement('div');
+                avatar.className = 'module-avatar';
+                avatar.style.backgroundColor = m.color;
+                avatar.textContent = m.label.charAt(0);
+
+                const bodyDiv = document.createElement('div');
+                bodyDiv.className = 'module-card-body';
+                const title = document.createElement('div');
+                title.className = 'module-card-title';
+                title.textContent = m.label;
+                const desc = document.createElement('div');
+                desc.className = 'module-card-desc';
+                desc.textContent = m.description;
+                bodyDiv.appendChild(title);
+                bodyDiv.appendChild(desc);
+
+                const chevron = document.createElement('div');
+                chevron.className = 'module-card-chevron';
+                chevron.textContent = '›';
+
+                card.appendChild(avatar);
+                card.appendChild(bodyDiv);
+                card.appendChild(chevron);
+                card.addEventListener('click', () => goToSessions(m));
+                grid.appendChild(card);
+            });
+
+            // const banner = document.getElementById('missingIdsBanner');
+            // banner.style.display = (userId && courseId) ? 'none' : '';
+        }
+
+        document.getElementById('manualIdsSubmit').addEventListener('click', () => {
+            const u = document.getElementById('manualUserId').value.trim();
+            const c = document.getElementById('manualCourseId').value.trim();
+            if (u) userId = u;
+            if (c) courseId = c;
+            //updateIdChip();
+            renderModules();
+        });
+
+        function updateIdChip() {
+            const chip = document.getElementById('idChip');
+            chip.textContent = (userId && courseId) ? ('learner: ' + userId + ' · course: ' + courseId) : 'no learner ID resolved';
+        }
+
+        // ── Rendering: breadcrumb ─────────────────────────────────
+        function renderBreadcrumb() {
+            const el = document.getElementById('breadcrumb');
+            el.innerHTML = '';
+            el.appendChild(crumbEl('All modules', state.view !== 'modules', 'modules'));
+            if (state.module) {
+                el.appendChild(sepEl());
+                el.appendChild(crumbEl(state.module.label, false, 'modules'));
+            }
+        }
+
+        function sepEl() {
+            const span = document.createElement('span');
+            span.className = 'crumb-sep';
+            span.textContent = '›';
+            return span;
+        }
+
+        function crumbEl(text, clickable, nav) {
+            const span = document.createElement('span');
+            span.className = 'crumb' + (clickable ? '' : ' current');
+            span.textContent = text;
+            if (clickable) {
+                span.addEventListener('click', () => {
+                    if (nav === 'modules') goToModules();
+                    if (nav === 'sessions') goToSessions(state.module, true);
+                });
+            }
+            return span;
+        }
+
+        // ── Navigation ─────────────────────────────────────────────
+        function showView(id) {
+            document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+            document.getElementById(id).classList.add('active');
+        }
+
+        function goToModules() {
+            state.view = 'modules';
+            state.module = null;
+            showView('modulesView');
+            renderBreadcrumb();
+        }
+
+        function goToSessions(module, skipIfSame) {
+            if (skipIfSame && state.module && state.module.id === module.id && state.view === 'transcript') {
+                showView('transcriptView');
+                return;
+            }
+            state.view = 'transcript';
+            state.module = module;
+            document.getElementById('transcriptTitle').textContent = module.label;
+            document.getElementById('transcriptMeta').textContent = '';
+            showView('transcriptView');
+            renderBreadcrumb();
+            loadModuleSummary(module);
+        }
+
+        document.querySelectorAll('.back-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const target = btn.getAttribute('data-back');
+                if (target === 'modules') goToModules();
+            });
+        });
+
+        // ── Loading: module summary ─────────────────────────────────
+        async function loadModuleSummary(module) {
+            const container = document.getElementById('transcriptContainer');
+            const cached = sessionsCache[module.id];
+            if (cached && cached.status === 'ok') {
+                renderTranscriptMessages(cached.messages);
+                return;
+            }
+
+            if (!userId || !courseId) {
+                container.innerHTML = stateMessageHtml('error',
+                    'Missing User Information. Contact your admin');
+                return;
+            }
+
+            container.innerHTML = loadingHtml('Loading…');
+            try {
+                const json = await postWebhook(SUMMARY_WEBHOOK_URL, { user_id: userId, course_id: courseId, queryString: module.queryString });
+                const sessions = normalizeSessions(json, module.id);
+                const messages = sessions.map(s => ({ type: 'ai', content: s.preview }));
+                sessionsCache[module.id] = { status: 'ok', messages };
+                renderTranscriptMessages(messages);
+            } catch (err) {
+                sessionsCache[module.id] = { status: 'error' };
+                container.innerHTML = stateMessageHtml('error',
+                    'Could not load this module. (' + err.message + ')',
+                    true);
+                const retry = document.getElementById('retryBtn');
+                if (retry) retry.addEventListener('click', () => { delete sessionsCache[module.id]; loadModuleSummary(module); });
+            }
+        }
+
+        function renderTranscriptMessages(messages) {
+            const container = document.getElementById('transcriptContainer');
+
+            if (!messages.length) {
+                container.innerHTML = stateMessageHtml('', 'No summary available for this module yet.');
+                return;
+            }
+
+            const html = messages
+                .map(msg => formatMessage(msg?.kwargs?.content ?? msg?.content ?? ''))
+                .join('<br><br>');
+            container.innerHTML = '<div class="summary-doc">' + html + '</div>';
+        }
+
+        // ── Init ───────────────────────────────────────────────────
+        //updateIdChip();
+        renderModules();
+        renderBreadcrumb();
+    </script>
+</body>
+</html>
